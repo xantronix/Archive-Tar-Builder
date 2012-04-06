@@ -1,0 +1,12 @@
+\.git/
+\.swp$
+\.tmp$
+\.old$
+\.bak$
+^blib/
+^cover_db/
+^nytprof
+^Makefile$
+^MANIFEST\.
+^\.
+/\.
