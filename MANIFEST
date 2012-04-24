@@ -1,0 +1,25 @@
+lib/Archive/Tar/Builder.pm
+lib/Archive/Tar/Builder/Bits.pm
+lib/Archive/Tar/Builder/Match.pm
+lib/Archive/Tar/Builder/Header.pm
+lib/Archive/Tar/Builder/Inode.pm
+Makefile.PL
+COPYRIGHT
+LICENSE
+MANIFEST			This list of files
+README
+mk/MY.pm
+mk/MY/Makefile.pm
+src/Match.typemap
+src/Match.xs
+src/line_reader.c
+src/line_reader.h
+src/matching.c
+src/matching.h
+src/pathmatch.c
+src/pathmatch.h
+src/ppport.h
+t/lib-Archive-Tar-Builder-Match.t
+t/lib-Archive-Tar-Builder-Header.t
+t/lib-Archive-Tar-Builder-Inode.t
+t/lib-Archive-Tar-Builder.t
