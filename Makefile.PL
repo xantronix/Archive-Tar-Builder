@@ -12,6 +12,7 @@ $makefile->write(
     'AUTHOR'       => 'Erin Schoenhals <erin@cpanel.net>',
     'LICENSE'      => 'perl',
     'ABSTRACT'     => 'Provides a braindead tarball builder thingie',
+    'PMLIBDIRS'    => ['lib'],
 
     'PREREQ_PM' => {
         'File::Find'   => 0,

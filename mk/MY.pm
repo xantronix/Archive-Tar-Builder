@@ -1,4 +1,5 @@
-package MY;
+package
+ MY;
 
 # Copyright (c) 2012, cPanel, Inc.
 # All rights reserved.

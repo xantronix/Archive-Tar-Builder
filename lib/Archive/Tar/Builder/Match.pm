@@ -17,7 +17,7 @@ BEGIN {
     use vars qw(@ISA $VERSION);
 
     our @ISA     = qw(Exporter);
-    our $VERSION = '0.3';
+    our $VERSION = '0.4_0001';
 }
 
 XSLoader::load( 'Archive::Tar::Builder', $VERSION );
