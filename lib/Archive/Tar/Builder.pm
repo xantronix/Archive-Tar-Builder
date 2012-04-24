@@ -36,7 +36,7 @@ filesystem into the archive under an arbitrary name.
 
 BEGIN {
     use Exporter ();
-    our $VERSION = '0.3';
+    our $VERSION = '0.4_0001';
 }
 
 our $BLOCK_SIZE = 512;

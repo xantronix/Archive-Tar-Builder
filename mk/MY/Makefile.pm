@@ -1,4 +1,5 @@
-package MY::Makefile;
+package
+ MY::Makefile;
 
 # Copyright (c) 2012, cPanel, Inc.
 # All rights reserved.

@@ -4,6 +4,7 @@ lib/Archive/Tar/Builder/Match.pm
 lib/Archive/Tar/Builder/Header.pm
 lib/Archive/Tar/Builder/Inode.pm
 Makefile.PL
+Changes
 COPYRIGHT
 LICENSE
 MANIFEST			This list of files

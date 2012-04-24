@@ -1,0 +1,11 @@
+Version 0.3
+
+    Initial release
+
+Version 0.4
+
+    Resolve an issue of build-time modules in mk/ being picked up by
+    CPAN's indexer, resulting in an "UNAUTHORIZED RELEASE" warning, by declaring
+    the PMLIBDIRS value in Makefile.PL to include only 'lib', and using a trick
+    (thanks RURBAN!) to cause the PAUSE indexer to not pick up the package
+    declarations in the files in mk/
