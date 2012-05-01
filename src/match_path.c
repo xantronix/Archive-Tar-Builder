@@ -38,7 +38,7 @@
 
 #include <string.h>
 
-#include "pathmatch.h"
+#include "match_path.h"
 
 /*
  * Check whether a character 'c' is matched by a list specification [...]:

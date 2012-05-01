@@ -7,18 +7,13 @@ DESCRIPTION
     few, its flexible interface provides for a number of possible uses in
     many scenarios.
 
-    Archive::Tar::Builder supports path inclusions and exclusions
-    (implemented in C for speed), arbitrary file name length, and the
-    ability to add items from the filesystem into the archive under an
-    arbitrary name.
+    Archive::Tar::Builder supports path inclusions and exclusions, arbitrary
+    file name length, and the ability to add items from the filesystem into
+    the archive under an arbitrary name.
 
 CONSTRUCTOR
-    "Archive::Tar::Builder->new(%opts)"
-        Create a new Archive::Tar::Builder object. Available options are:
-
-        gnu_extensions
-            Set to a true value to enable use of GNU extensions, namely
-            support for arbitrarily long filenames.
+    "Archive::Tar::Builder->new()"
+        Create a new Archive::Tar::Builder object.
 
 ADDING MEMBERS TO ARCHIVE
     "$archive->add_as(%members)"
@@ -27,7 +22,7 @@ ADDING MEMBERS TO ARCHIVE
         filesystem, and the values shall represent the eventual names of the
         members as they shall be written upon archive writing.
 
-    "$archive-">add(@files)>
+    "$archive-">add(@paths)>
         Add any number of members to the current archive.
 
 FILE PATH MATCHING
@@ -74,12 +69,18 @@ FILE PATH MATCHING
         writing.
 
 WRITING ARCHIVE DATA
+    "$archive->write($handle)"
+        Write a tar stream of ustar format, with GNU tar extensions for
+        supporting long filenames and other POSIX extensions for files >8GB.
+        Files will be included or excluded based on any possible previous
+        usage of the filename inclusion and exclusion calls. Members will be
+        written with the names given to them when they were added to the
+        archive, whether "$archive->add()" or "$archive->add_as()" was used.
+
+        Returns the total number of bytes written.
+
     "$archive->start($handle)"
-        Write a tar stream of either ustar (default) or GNU tar format
-        (optional), with files excluded based on any possible previous usage
-        of the filename inclusion and exclusion calls. Members will be
-        written with the names given to them when they were originally added
-        to the archive for writing.
+        A synonym for "$archive->write($handle)".
 
 COPYRIGHT
     Copyright (c) 2012, cPanel, Inc. All rights reserved. http://cpanel.net/

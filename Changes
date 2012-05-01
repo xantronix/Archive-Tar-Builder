@@ -1,6 +1,10 @@
-Version 0.3
+Version 0.5
 
-    Initial release
+    * Feature-for-feature reimplementation in C with a small XS layer
+    * Remove option of "GNU extensions"; GNU extensions are now always available
+      and use is implied
+    * Slightly better adherence to POSIX ustar header format, such as with ustar
+      header magic
 
 Version 0.4
 
@@ -9,3 +13,7 @@ Version 0.4
     the PMLIBDIRS value in Makefile.PL to include only 'lib', and using a trick
     (thanks RURBAN!) to cause the PAUSE indexer to not pick up the package
     declarations in the files in mk/
+
+Version 0.3
+
+    Initial release

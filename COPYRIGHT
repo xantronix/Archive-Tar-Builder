@@ -1,4 +1,4 @@
-ARchive::Tar::Builder
+Archive::Tar::Builder
 
 Copyright (c) 2012, cPanel, Inc.
 All rights reserved.
@@ -7,15 +7,15 @@ http://cpanel.net/
 This is free software; you can redistribute it and/or modify it under the same
 terms as Perl itself.  See the LICENSE file for further details.
 
-Portions of this code are taken from libarchive 3.0.3 and modified, and retain
+Portions of this code are taken from libarchive 3.0.3 and modified, but retain
 original copyright assignments.
 
-src/line_reader.c
+src/match_line_reader.c
     Copyright (c) 2008 Tim Kientzle
     Copyright (c) 2010 Joerg Sonnenberger
 
-src/matching.c
+src/match_engine.c
     Copyright (c) 2003-2007 Tim Kientzle
 
-src/pathmatch.c
+src/match_path.c
     Copyright (c) 2003-2007 Tim Kientzle
