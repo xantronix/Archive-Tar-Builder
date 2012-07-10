@@ -1,0 +1,3 @@
+TYPEMAP
+
+Archive::Tar::Builder	T_PTROBJ

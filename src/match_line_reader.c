@@ -42,7 +42,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "line_reader.h"
+#include "match_line_reader.h"
 
 #if defined(_WIN32) && !defined(__CYGWIN__) && !defined(__BORLANDC__)
 #define strdup _strdup

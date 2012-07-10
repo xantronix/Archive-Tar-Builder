@@ -39,9 +39,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "line_reader.h"
-#include "matching.h"
-#include "pathmatch.h"
+#include "match_line_reader.h"
+#include "match_engine.h"
+#include "match_path.h"
 
 struct match {
     struct match * next;
@@ -95,7 +95,7 @@ lafe_exclude_from_file(struct lafe_matching **matching, const char *pathname)
 {
     struct lafe_line_reader *lr;
     const char *p;
-    int ret = 0, err;
+    int ret = 0;
 
     if ((lr = lafe_line_reader(pathname, 0)) == NULL) {
         return -1;
