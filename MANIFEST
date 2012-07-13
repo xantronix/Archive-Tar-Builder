@@ -1,4 +1,5 @@
 lib/Archive/Tar/Builder.pm
+lib/Archive/Tar/Builder/UserCache.pm
 Makefile.PL
 Changes
 COPYRIGHT
