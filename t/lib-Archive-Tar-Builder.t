@@ -16,11 +16,12 @@ use Cwd           ();
 use File::Temp    ();
 use File::Path    ();
 use IPC::Pipeline ();
+use Symbol        ();
 
 use Archive::Tar::Builder ();
 
 use Test::Exception;
-use Test::More ( 'tests' => 43 );
+use Test::More ( 'tests' => 44 );
 
 sub find_tar {
     my @PATHS    = qw( /bin /usr/bin /usr/local/bin );
@@ -336,10 +337,12 @@ my $tar     = find_tar();
     my $archive = Archive::Tar::Builder->new;
     $archive->add($tmpdir);
 
+    my $err = Symbol::gensym();
+
     my @pids = IPC::Pipeline::pipeline(
         undef,
         my $out,
-        undef,
+        $err,
         sub {
             $archive->write( \*STDOUT );
             exit 0;
@@ -348,17 +351,46 @@ my $tar     = find_tar();
         [ $tar, '-tf', '-' ]
     );
 
+    my ( $paths, $errors );
+
+    my $rin = '';
+    vec( $rin, fileno($out), 1 ) = 1;
+    vec( $rin, fileno($err), 1 ) = 1;
+
     my %FOUND = (
         $path         => 0,
         "$tmpdir/bar" => 0
     );
 
-    while ( my $line = readline($out) ) {
-        chomp $line;
+    while ( select( my $rout = $rin, undef, undef, undef ) > 0 ) {
+        my $buf;
 
-        $FOUND{$line} = 1 if defined $FOUND{$line};
+        if ( vec( $rout, fileno($out), 1 ) ) {
+            if ( sysread( $out, $buf, 512 ) == 0 ) {
+                vec( $rin, fileno($out), 1 ) = 0;
+            }
+            else {
+                $paths .= $buf;
+            }
+        }
+
+        if ( vec( $rout, fileno($err), 1 ) ) {
+            if ( sysread( $err, $buf, 512 ) == 0 ) {
+                vec( $rin, fileno($err), 1 ) = 0;
+            }
+            else {
+                $errors .= $buf;
+            }
+        }
+
+        last unless grep { $_ } unpack( 'C*', $rin );
     }
 
+    foreach my $item ( split "\n", $paths ) {
+        $FOUND{$item} = 1;
+    }
+
+    close $err;
     close $out;
 
     my %statuses = map {
@@ -366,7 +398,12 @@ my $tar     = find_tar();
         $_ => $? >> 8;
     } @pids;
 
+    foreach my $item ( split "\n", $errors ) {
+        diag("From standard error: $item");
+    }
+
     is( $statuses{ $pids[0] } => 0, '$archive->write() did not die while archiving long pathnames' );
-    ok( $FOUND{$path},         '$archive->write() properly encoded a long pathname for directory' );
+    is( $statuses{ $pids[1] } => 0, 'tar -tf - did not die while parsing tar stream with long pathnames' );
+    ok( $FOUND{$path},         "\$archive->write() properly encoded a long pathname for directory for $path" );
     ok( $FOUND{"$tmpdir/bar"}, '$archive->write properly encoded a symlink' );
 }
