@@ -15,9 +15,15 @@ b_stack *b_path_new(b_string *string) {
 
     b_stack_set_destructor(ret, B_STACK_DESTRUCTOR(b_string_free));
 
-    if ((dup = strndup(string->str, string->len)) == NULL) {
-        goto error_strndup;
+    if ((dup = malloc(string->len + 1)) == NULL) {
+        goto error_malloc;
     }
+
+    if (memcpy(dup, string->str, string->len) == NULL) {
+        goto error_memcpy;
+    }
+
+    dup[string->len] = '\0';
 
     tmp = dup;
 
@@ -68,9 +74,10 @@ b_stack *b_path_new(b_string *string) {
 
 error_item_push:
 error_item_copy:
+error_memcpy:
     free(dup);
 
-error_strndup:
+error_malloc:
     b_stack_destroy(ret);
 
 error_stack_new:
