@@ -126,7 +126,7 @@ sub _evaluate_file {
         # as it performs a chdir() into the target directory of the C source
         # it creates.
         #
-        push @{ $self->{'_typemaps'} }, Cwd::realpath($filename);
+        push @{ $self->{'_typemaps'} }, Cwd::getcwd() . "/$filename";
     }
 }
 
@@ -134,7 +134,7 @@ sub _scan_srcdir {
     my ($self) = @_;
     my $srcdir = $self->{'srcdir'};
 
-    opendir( my $dh, $srcdir ) or die("Unable to open directory $self for reading: $!");
+    opendir( my $dh, $srcdir ) or die("Unable to open directory $srcdir for reading: $!");
 
     while ( my $item = readdir($dh) ) {
         next if $item eq '.' || $item eq '..';
@@ -187,7 +187,7 @@ sub write {
         'OBJECT'    => $object,
         'TYPEMAPS'  => $self->{'_typemaps'},
         'XS'        => $self->{'_xs'},
-        'postamble' => $self
+        'postamble' => { %{$self} }
     );
 
     return ExtUtils::MakeMaker::WriteMakefile( %args, %overrides );

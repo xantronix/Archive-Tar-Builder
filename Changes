@@ -1,3 +1,9 @@
+Version 0.6
+
+    * No functional changes; adds build and test support for Perl 5.6 toolchains
+      with the help of a variety of very ugly hacks in various places in unit
+      test t/lib-Archive-Tar-Builder.t
+
 Version 0.5
 
     * Feature-for-feature reimplementation in C with a small XS layer
