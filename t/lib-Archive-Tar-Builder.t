@@ -12,15 +12,14 @@ use warnings;
 
 use ExtUtils::testlib;
 
-use Cwd           ();
-use File::Temp    ();
-use File::Path    ();
-use IPC::Pipeline ();
-use Symbol        ();
+use Cwd        ();
+use File::Temp ();
+use File::Path ();
+use IPC::Open3 ();
+use Symbol     ();
 
 use Archive::Tar::Builder ();
 
-use Test::Exception;
 use Test::More ( 'tests' => 44 );
 
 sub find_tar {
@@ -102,17 +101,27 @@ my $tar     = find_tar();
     #
     # Test to see the expected contents are written.
     #
-    my @pids = IPC::Pipeline::pipeline(
-        undef,
-        my $out,
-        undef,
-        sub {
-            $archive->write( \*STDOUT );
-            exit 0;
-        },
+    my $reader_pid = IPC::Open3::open3( my ( $in, $out ), undef, $tar, '-tf', '-' );
+    my $writer_pid = fork();
 
-        [ $tar, '-tf', '-' ]
-    );
+    if ( !defined $writer_pid ) {
+        die("Unable to fork(): $!");
+    }
+    elsif ( $writer_pid == 0 ) {
+        close $out;
+        $archive->write($in);
+
+        #
+        # This may seem a bit gratuitous, but this is needed because Perl 5.6.2's
+        # distribution of File::Temp has a bug in which directories are cleaned
+        # up regardless if the process exiting is a child of the process that
+        # created the directory in question, or not.  execve() is the easiest way
+        # to clear away atexit() handlers in this case.
+        #
+        exec( '/bin/sh', '-c', 'true' );
+    }
+
+    close $in;
 
     my %EXPECTED = map { $_ => 1 } qw(
       foo/
@@ -146,30 +155,36 @@ my $tar     = find_tar();
     my %statuses = map {
         waitpid( $_, 0 );
         $_ => $? >> 8;
-    } @pids;
+    } ( $writer_pid, $reader_pid );
 
     is( $found, $entries, '$archive->write() wrote the appropriate number of items' );
-    is( $statuses{ $pids[0] } => 0, '$archive->write() subprocess exited with 0 status' );
-    is( $statuses{ $pids[1] } => 0, 'tar subprocess exited with 0 status' );
+    is( $statuses{$writer_pid} => 0, '$archive->write() subprocess exited with 0 status' );
+    is( $statuses{$reader_pid} => 0, 'tar subprocess exited with 0 status' );
 
     #
     # Exercise $archive->write() in the parent process; we cannot capture output
     # if we are to do this reliably.
     #
-    my ($pid) = IPC::Pipeline::pipeline(
-        my $in,
-        undef, undef,
-        sub {
-            open( STDOUT, '>/dev/null' );
-            exec( $tar, '-tf', '-' );
-            exit 127;
-        }
-    );
+    pipe my $in_read, $in or die("Unable to pipe(): $!");
 
-    lives_ok {
-        $archive->write($in);
+    my $pid = fork();
+
+    if ( !defined $pid ) {
+        die("Unable to fork(): $!");
     }
-    '$archive->write() does not die when writing to handle';
+    elsif ( $pid == 0 ) {
+        close $in;
+
+        open( STDIN,  '<&=' . fileno($in_read) );
+        open( STDOUT, '>/dev/null' );
+        exec( $tar, '-tf', '-' ) or die("Unable to exec() $tar: $!");
+    }
+
+    close $in_read;
+
+    eval { $archive->write($in); };
+
+    is( $@ => '', '$archive->write() does not die when writing to handle' );
 
     close $in;
     waitpid( $pid, 0 );
@@ -218,10 +233,9 @@ my $tar     = find_tar();
 {
     my $archive = Archive::Tar::Builder->new;
 
-    lives_ok {
-        $archive->exclude('excluded');
-    }
-    '$archive->exclude() does not die';
+    eval { $archive->exclude('excluded'); };
+
+    is( $@ => '', '$archive->exclude() does not die' );
 
     my $badfile = '/dev/null/impossible';
     my ( $fh, $file ) = File::Temp::tempfile();
@@ -231,15 +245,13 @@ my $tar     = find_tar();
     print {$fh} "backup-[!_]*_[!-]*-[!-]*-[!_]*_foo*\n";
     close $fh;
 
-    lives_ok {
-        $archive->exclude_from_file($file);
-    }
-    '$archive->exclude_from_file() does not die when given a good file';
+    eval { $archive->exclude_from_file($file); };
 
-    throws_ok {
-        $archive->exclude_from_file($badfile);
-    }
-    qr/Cannot add items to exclusion list from file $badfile:/, '$archive->exclude_from_file() dies when unable to read file';
+    is( $@ => '', '$archive->exclude_from_file() does not die when given a good file' );
+
+    eval { $archive->exclude_from_file($badfile); };
+
+    like( $@ => qr/Cannot add items to exclusion list from file $badfile:/, '$archive->exclude_from_file() dies when unable to read file' );
 
     my %TESTS = (
         'foo/bar/baz'                                    => 1,
@@ -257,7 +269,7 @@ my $tar     = find_tar();
         '/home/backu-4.5.2012_12-10-36_foo.tar.gz'       => 1
     );
 
-    note('Excluding: "excluded", "skipped", "unwanted", "ignored"');
+    print '# Excluding: "excluded", "skipped", "unwanted", "ignored"' . "\n";
 
     foreach my $test ( sort keys %TESTS ) {
         my $expected = $TESTS{$test};
@@ -277,7 +289,7 @@ my $tar     = find_tar();
 {
     my $archive = Archive::Tar::Builder->new;
 
-    note('Using "foo", "bar", "baz" and "meow" as inclusions');
+    print '# Using "foo", "bar", "baz" and "meow" as inclusions' . "\n";
 
     my $badfile = '/dev/null/impossible';
     my ( $fh, $file ) = File::Temp::tempfile();
@@ -286,20 +298,17 @@ my $tar     = find_tar();
     print {$fh} "baz\n";
     close $fh;
 
-    lives_ok {
-        $archive->include('meow');
-    }
-    '$archive->include() does not die when adding inclusion pattern';
+    eval { $archive->include('meow'); };
 
-    throws_ok {
-        $archive->include_from_file($badfile);
-    }
-    qr/^Cannot add items to inclusion list from file $badfile:/, '$archive->include_from_file() dies on invalid file';
+    is( $@ => '', '$archive->include() does not die when adding inclusion pattern' );
 
-    lives_ok {
-        $archive->include_from_file($file);
-    }
-    '$archive->include_from_file() does not die when adding include patterns from file';
+    eval { $archive->include_from_file($badfile); };
+
+    like( $@ => qr/^Cannot add items to inclusion list from file $badfile:/, '$archive->include_from_file() dies on invalid file' );
+
+    eval { $archive->include_from_file($file); };
+
+    is( $@ => '', '$archive->include_from_file() does not die when adding include patterns from file' );
 
     my %TESTS = (
         'foo'          => 1,
@@ -339,17 +348,16 @@ my $tar     = find_tar();
 
     my $err = Symbol::gensym();
 
-    my @pids = IPC::Pipeline::pipeline(
-        undef,
-        my $out,
-        $err,
-        sub {
-            $archive->write( \*STDOUT );
-            exit 0;
-        },
+    my $reader_pid = IPC::Open3::open3( my ( $in, $out ), $err, $tar, '-tf', '-' );
+    my $writer_pid = fork();
 
-        [ $tar, '-tf', '-' ]
-    );
+    if ( !defined $writer_pid ) {
+        die("Unable to fork(): $!");
+    }
+    elsif ( $writer_pid == 0 ) {
+        $archive->write($in);
+        exec( '/bin/sh', '-c', 'true' );
+    }
 
     my ( $paths, $errors );
 
@@ -362,11 +370,16 @@ my $tar     = find_tar();
         "$tmpdir/bar" => 0
     );
 
+    close $in;
+
     while ( select( my $rout = $rin, undef, undef, undef ) > 0 ) {
         my $buf;
+        my $len;
 
         if ( vec( $rout, fileno($out), 1 ) ) {
-            if ( sysread( $out, $buf, 512 ) == 0 ) {
+            $len = sysread( $out, $buf, 512 );
+
+            if ( !$len ) {
                 vec( $rin, fileno($out), 1 ) = 0;
             }
             else {
@@ -375,7 +388,9 @@ my $tar     = find_tar();
         }
 
         if ( vec( $rout, fileno($err), 1 ) ) {
-            if ( sysread( $err, $buf, 512 ) == 0 ) {
+            $len = sysread( $err, $buf, 512 );
+
+            if ( !$len ) {
                 vec( $rin, fileno($err), 1 ) = 0;
             }
             else {
@@ -396,14 +411,14 @@ my $tar     = find_tar();
     my %statuses = map {
         waitpid( $_, 0 );
         $_ => $? >> 8;
-    } @pids;
+    } ( $reader_pid, $writer_pid );
 
     foreach my $item ( split "\n", $errors ) {
         diag("From standard error: $item");
     }
 
-    is( $statuses{ $pids[0] } => 0, '$archive->write() did not die while archiving long pathnames' );
-    is( $statuses{ $pids[1] } => 0, 'tar -tf - did not die while parsing tar stream with long pathnames' );
+    is( $statuses{$writer_pid} => 0, '$archive->write() did not die while archiving long pathnames' );
+    is( $statuses{$reader_pid} => 0, 'tar -tf - did not die while parsing tar stream with long pathnames' );
     ok( $FOUND{$path},         "\$archive->write() properly encoded a long pathname for directory for $path" );
     ok( $FOUND{"$tmpdir/bar"}, '$archive->write properly encoded a symlink' );
 }
