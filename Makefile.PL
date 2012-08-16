@@ -14,14 +14,6 @@ $makefile->write(
     'ABSTRACT'     => 'Provides a braindead tarball builder thingie',
     'PMLIBDIRS'    => ['lib'],
 
-    'PREREQ_PM' => {
-        'File::Find'   => 0,
-        'File::Spec'   => 0,
-        'Digest::SHA1' => 0,
-        'Math::BigInt' => 0
-    },
-
-    'BUILD_REQUIRES' => {
-        'Test::Simple'     => '0.44'
-    }
+    'PREREQ_PM'      => {},
+    'BUILD_REQUIRES' => { 'Test::Simple' => '0.44' }
 );

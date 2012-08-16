@@ -1,3 +1,8 @@
+Version 0.7
+
+    * No functional changes; drop unnecessary dependencies from PREREQ_PM in
+      Makefile.PL
+
 Version 0.6
 
     * No functional changes; adds build and test support for Perl 5.6 toolchains
