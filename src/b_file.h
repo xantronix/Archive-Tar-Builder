@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include "b_string.h"
 
-extern ssize_t b_file_write_contents(int tar_fd, b_string *path);
-extern ssize_t b_file_write_path_blocks(int tar_fd, b_string *path);
+ssize_t b_file_write_contents(int tar_fd, int file_fd);
+ssize_t b_file_write_path_blocks(int tar_fd, b_string *path);
 
 #endif /* _B_FILE_H */

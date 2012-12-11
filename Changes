@@ -1,3 +1,12 @@
+Version 0.8
+
+    * Implemented an error handling mechanism which allows the presentation of
+      non-fatal warnings to the caller, but also causes Archive::Tar::Builder
+      to exit cleanly in otherwise fatal conditions; simple permissions issues
+      while building an archive will no longer stop the stream
+
+    * Allow caller to suppress warn()ings when archiving files
+
 Version 0.7
 
     * No functional changes; drop unnecessary dependencies from PREREQ_PM in

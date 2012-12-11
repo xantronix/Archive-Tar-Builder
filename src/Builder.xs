@@ -17,13 +17,18 @@
 #include <errno.h>
 #include "b_string.h"
 #include "b_find.h"
+#include "b_error.h"
 #include "b_builder.h"
 
 typedef b_builder * Archive__Tar__Builder;
 
+struct builder_options {
+    int quiet;
+};
+
 static int builder_lookup(SV *cache, uid_t uid, gid_t gid, b_string **user, b_string **group) {
     dSP;
-    I32 i, retc;
+    I32 retc;
 
     ENTER;
     SAVETMPS;
@@ -86,19 +91,43 @@ error_lookup:
     return -1;
 }
 
+void builder_warn(b_error *err) {
+    if (err == NULL) return;
+
+    warn("%s: %s: %s", b_error_path(err)->str, b_error_message(err)->str, strerror(b_error_errno(err)));
+}
+
 MODULE = Archive::Tar::Builder PACKAGE = Archive::Tar::Builder PREFIX = builder_
 
 Archive::Tar::Builder
-builder_new(klass)
+builder_new(klass, ...)
     char *klass
 
     CODE:
         b_builder *builder;
         SV *cache = NULL;
         I32 i, retc;
+        struct builder_options *options;
+
+        if ((items - 1) % 2 != 0) {
+            croak("Uneven number of arguments passed; must be in 'key' => 'value' format");
+        }
+
+        if ((options = malloc(sizeof(*options))) == NULL) {
+            croak("%s: %s", "malloc()", strerror(errno));
+        }
+
+        options->quiet = 0;
 
         if ((builder = b_builder_new()) == NULL) {
             croak("%s: %s", "b_builder_new()", strerror(errno));
+        }
+
+        for (i=1; i<items; i+=2) {
+            char *key = SvPV_nolen(ST(i));
+            SV *value = ST(i+1);
+
+            if (strcmp(key, "quiet") == 0 && SvIV(value)) options->quiet = 1;
         }
 
         /*
@@ -116,6 +145,7 @@ builder_new(klass)
         PUTBACK;
 
         b_builder_set_lookup_service(builder, B_LOOKUP_SERVICE(builder_lookup), cache); 
+        b_builder_set_data(builder, options);
 
         RETVAL = builder;
 
@@ -230,12 +260,21 @@ builder_write(builder, fh)
     CODE:
         size_t i, count;
 
+        b_error *err = b_error_new();
+
         b_builder_context ctx = {
             .builder = builder,
             .fd      = PerlIO_fileno(fh),
             .path    = NULL,
-            .total   = 0
+            .total   = 0,
+            .err     = err
         };
+
+        struct builder_options *options = builder->data;
+
+        if (!options->quiet) {
+            b_error_set_callback(err, builder_warn);
+        }
 
         count = b_stack_count(builder->members);
 
@@ -250,8 +289,12 @@ builder_write(builder, fh)
             ctx.path   = member->path;
 
             if (b_find(member->path, B_FIND_CALLBACK(b_builder_write_file), 0, &ctx) < 0) {
-                croak("%s: %s: %s", "b_find()", (ctx.path)->str, strerror(errno));
+                croak("%s: %s: %s", "b_find()", member->path->str, strerror(errno));
             }
+        }
+
+        if (b_error_status(err) != 0) {
+            croak("Delayed nonzero exit due to previous errors");
         }
 
         RETVAL = ctx.total;

@@ -20,7 +20,7 @@ use Symbol     ();
 
 use Archive::Tar::Builder ();
 
-use Test::More ( 'tests' => 44 );
+use Test::More ( 'tests' => 45 );
 
 sub find_tar {
     my @PATHS    = qw( /bin /usr/bin /usr/local/bin );
@@ -332,6 +332,27 @@ my $tar     = find_tar();
     }
 
     unlink($file);
+}
+
+# Test error handling
+SKIP: {
+    skip 'Test will not work as root' unless $<;
+
+    my $tmpdir = File::Temp::tempdir( 'CLEANUP' => 1 );
+    my $path   = "$tmpdir/foo";
+
+    mkdir( $path, 0 );
+
+    open( my $fh, '>', '/dev/null' );
+
+    my $builder = Archive::Tar::Builder->new( 'quiet' => 1 );
+    $builder->add($tmpdir);
+
+    eval {
+        $builder->write($fh);
+    };
+
+    like( $@ => qr/^Delayed nonzero exit/, '$builder->write() dies if any errors were encountered' );
 }
 
 # Test long filenames, symlinks

@@ -2,8 +2,9 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
 #include "match_engine.h"
-#include "b_find.h"
 #include "b_file.h"
 #include "b_path.h"
 #include "b_string.h"
@@ -72,6 +73,7 @@ b_builder *b_builder_new() {
     builder->match          = NULL;
     builder->lookup_service = NULL;
     builder->lookup_ctx     = NULL;
+    builder->data           = NULL;
 
     return builder;
 
@@ -80,6 +82,12 @@ error_stack_new:
 
 error_malloc:
     return NULL;
+}
+
+void b_builder_set_data(b_builder *builder, void *data) {
+    if (builder == NULL) return;
+
+    builder->data = data;
 }
 
 /*
@@ -141,6 +149,7 @@ void b_builder_destroy(b_builder *builder) {
 
     builder->members = NULL;
     builder->match   = NULL;
+    builder->data    = NULL;
 
     free(builder);
 }
@@ -151,6 +160,8 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
     b_builder_member *member = ctx->member;
     int fd                   = ctx->fd;
 
+    int file_fd = 0;
+
     b_string *new_member_name = NULL;
 
     ssize_t wrlen = 0;
@@ -158,6 +169,10 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
     b_header *header;
 
     ctx->path = path;
+
+    if (ctx->err) {
+        b_error_clear(ctx->err);
+    }
 
     if (member->has_different_name) {
         if ((new_member_name = b_string_dup(member->member_name)) == NULL) {
@@ -178,7 +193,21 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
         return 0;
     }
 
+    if ((st->st_mode & S_IFMT) == S_IFREG) {
+        if ((file_fd = open(path->str, O_RDONLY)) < 0) {
+            if (ctx->err) {
+                b_error_set(ctx->err, B_ERROR_WARN, errno, "Cannot open file", path);
+            }
+
+            goto error_open;
+        }
+    }
+
     if ((header = b_header_for_file(path, new_member_name? new_member_name: path, st)) == NULL) {
+        if (ctx->err) {
+            b_error_set(ctx->err, B_ERROR_FATAL, errno, "Cannot build header for file", path);
+        }
+
         goto error_header_for_file;
     }
 
@@ -191,6 +220,10 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
         b_string *user = NULL, *group = NULL;
 
         if (builder->lookup_service(builder->lookup_ctx, st->st_uid, st->st_gid, &user, &group) < 0) {
+            if (ctx->err) {
+                b_error_set(ctx->err, B_ERROR_WARN, errno, "Cannot lookup user and group for file", path);
+            }
+
             goto error_lookup;
         }
 
@@ -222,12 +255,20 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
         }
 
         if ((wrlen = write(fd, block, sizeof(*block))) < 0) {
+            if (ctx->err) {
+                b_error_set(ctx->err, B_ERROR_FATAL, errno, "Cannot write file header", path);
+            }
+
             goto error_write;
         }
 
         ctx->total += wrlen;
 
         if ((wrlen = b_file_write_path_blocks(fd, longlink_path)) < 0) {
+            if (ctx->err) {
+                b_error_set(ctx->err, B_ERROR_FATAL, errno, "Cannot write long filename header", path);
+            }
+
             goto error_write;
         }
 
@@ -250,12 +291,20 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
     /*
      * Finally, end by writing the file contents.
      */
-    if ((st->st_mode & S_IFMT) == S_IFREG) {
-        if ((wrlen = b_file_write_contents(fd, path)) < 0) {
+    if (file_fd) {
+        if ((wrlen = b_file_write_contents(fd, file_fd)) < 0) {
+            if (ctx->err) {
+                b_error_set(ctx->err, B_ERROR_WARN, errno, "Cannot write file to archive", path);
+            }
+
             goto error_write;
         }
 
         ctx->total += wrlen;
+
+        close(file_fd);
+
+        file_fd = 0;
     }
 
     if (new_member_name != NULL) {
@@ -274,6 +323,11 @@ error_lookup:
     b_header_destroy(header);
 
 error_header_for_file:
+    if (file_fd) {
+        close(file_fd);
+    }
+
+error_open:
 error_string_append_path:
     if (new_member_name != NULL) {
         b_string_free(new_member_name);
