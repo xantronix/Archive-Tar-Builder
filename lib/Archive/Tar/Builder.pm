@@ -19,7 +19,7 @@ BEGIN {
     use vars qw(@ISA $VERSION);
 
     our @ISA     = qw(Exporter);
-    our $VERSION = '0.7';
+    our $VERSION = '0.8';
 }
 
 XSLoader::load( 'Archive::Tar::Builder', $VERSION );
@@ -44,9 +44,17 @@ under an arbitrary name.
 
 =over
 
-=item C<Archive::Tar::Builder-E<gt>new()>
+=item C<Archive::Tar::Builder-E<gt>new(%opts)>
 
-Create a new Archive::Tar::Builder object.
+Create a new Archive::Tar::Builder object.  The following options are honored:
+
+=over
+
+=item C<quiet>
+
+When set, warnings encountered when reading individual files are not reported.
+
+=back
 
 =back
 

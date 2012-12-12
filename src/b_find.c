@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
+#include "b_builder.h"
 #include "b_string.h"
 #include "b_stack.h"
 #include "b_path.h"
@@ -149,7 +150,7 @@ static void b_dir_item_free(b_dir_item *item) {
  * callback() should return a 0 or 1; 0 to indicate that traversal at the current
  * level should halt, or 1 that it should continue.
  */
-int b_find(b_string *path, b_find_callback callback, int flags, void *context) {
+int b_find(b_string *path, b_find_callback callback, int flags, b_builder_context *ctx) {
     b_stack *dirs;
     struct stat st;
     b_dir *dir;
@@ -176,7 +177,7 @@ int b_find(b_string *path, b_find_callback callback, int flags, void *context) {
      * callback, then do not bother with traversal code.  Otherwise, all code after
      * these guard clauses pertains to the case of 'path' being a directory.
      */
-    res = callback(context, cleanpath, &st);
+    res = callback(ctx, cleanpath, &st);
 
     if (res == 0) {
         goto cleanup;
@@ -189,6 +190,10 @@ int b_find(b_string *path, b_find_callback callback, int flags, void *context) {
     }
 
     if ((dir = b_dir_open(cleanpath)) == NULL) {
+        if (ctx->err) {
+            b_error_set(ctx->err, B_ERROR_WARN, errno, "Unable to open directory", cleanpath);
+        }
+
         goto error_dir_open;
     }
 
@@ -204,18 +209,26 @@ int b_find(b_string *path, b_find_callback callback, int flags, void *context) {
                 goto cleanup_item;
             }
 
-            res = callback(context, item->path, item->st);
+            res = callback(ctx, item->path, item->st);
 
             if (res == 0) {
                 goto cleanup_item;
             } else if (res < 0) {
-                goto error_item;
+                if (ctx->err && !b_error_fatal(ctx->err)) {
+                    goto cleanup_item;
+                } else {
+                    goto error_item;
+                }
             }
 
             if ((item->st->st_mode & S_IFMT) == S_IFDIR) {
                 b_dir *newdir;
 
                 if ((newdir = b_dir_open(item->path)) == NULL) {
+                    if (ctx->err) {
+                        b_error_set(ctx->err, B_ERROR_WARN, errno, "Unable to open directory", item->path);
+                    }
+
                     if (errno == EACCES) {
                         goto cleanup_item;
                     } else {

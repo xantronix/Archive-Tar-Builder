@@ -82,10 +82,10 @@ typedef struct _b_header_block {
     char padding  [B_HEADER_PADDING_SIZE];
 } b_header_block;
 
-extern b_header *       b_header_for_file(b_string *path, b_string *member_name, struct stat *st);
-extern int              b_header_set_usernames(b_header *header, b_string *user, b_string *group);
-extern b_header_block * b_header_encode_block(b_header_block *block, b_header *header);
-extern b_header_block * b_header_encode_longlink_block(b_header_block *block, b_string *path);
-extern void             b_header_destroy(b_header *header);
+b_header *       b_header_for_file(b_string *path, b_string *member_name, struct stat *st);
+int              b_header_set_usernames(b_header *header, b_string *user, b_string *group);
+b_header_block * b_header_encode_block(b_header_block *block, b_header *header);
+b_header_block * b_header_encode_longlink_block(b_header_block *block, b_string *path);
+void             b_header_destroy(b_header *header);
 
 #endif /* _B_HEADER_H */

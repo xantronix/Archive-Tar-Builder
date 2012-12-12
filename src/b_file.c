@@ -63,18 +63,13 @@ error_malloc:
     return -1;
 }
 
-ssize_t b_file_write_contents(int tar_fd, b_string *path) {
-    int fd;
+ssize_t b_file_write_contents(int tar_fd, int file_fd) {
     int tmp_errno;
 
     unsigned char buf[B_BUFFER_SIZE];
     ssize_t rlen = 0, wrlen = 0, total = 0;
 
-    if ((fd = open(path->str, O_RDONLY)) < 0) {
-        goto error_open;
-    }
-
-    while ((rlen = read(fd, buf, B_BUFFER_SIZE)) > 0) {
+    while ((rlen = read(file_fd, buf, B_BUFFER_SIZE)) > 0) {
         size_t padlen = B_BUFFER_SIZE - rlen;
 
         if (padlen > 0) {
@@ -92,21 +87,10 @@ ssize_t b_file_write_contents(int tar_fd, b_string *path) {
         goto error_io;
     }
 
-    if (close(fd) < 0) {
-        goto error_close;
-    }
-
     return total;
 
 error_io:
     tmp_errno = errno;
     
-    if (close(fd) < 0) {
-        /* Restore previous errno in case of close() failure */
-        errno = tmp_errno;
-    }
-       
-error_close:
-error_open:
     return -1;
 }
