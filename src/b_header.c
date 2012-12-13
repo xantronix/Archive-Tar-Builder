@@ -51,23 +51,29 @@ static inline uint64_t checksum(b_header_block *block) {
     return sum;
 }
 
+static inline int is_big_endian() {
+    uint16_t num = 1;
+
+    return ((uint8_t *)&num)[1];
+}
+
 static inline void encode_base256_size(b_header_block *block, uint64_t value) {
     size_t i;
     size_t value_size = sizeof(value);
-    size_t offset     = B_HEADER_CHECKSUM_SIZE - value_size;
+    size_t offset     = B_HEADER_SIZE_SIZE - value_size;
 
-    memset(block->checksum, 0x00, B_HEADER_CHECKSUM_SIZE);
+    memset(block->size, 0x00, B_HEADER_SIZE_SIZE);
 
     for (i=0; i<value_size; i++) {
-        uint64_t mask = 0xff << (value_size - i - 1);
+        int from_i = is_big_endian()? i: value_size - i - 1;
 
-        block->checksum[offset + i] = (value & mask) >> (i + 1);
+        block->size[offset + i] = ((uint8_t *)&value)[from_i];
     }
 
     /*
      * Set the uppermost bit to indicate a base256-encoded size value.
      */
-    block->checksum[0] |= 0x80;
+    block->size[0] |= 0x80;
 }
 
 static inline void encode_checksum(b_header_block *block) {
@@ -88,7 +94,7 @@ b_header_block *b_header_encode_block(b_header_block *block, b_header *header) {
     snprintf(block->uid,  B_HEADER_UID_SIZE,  B_HEADER_UID_FORMAT,  header->uid);
     snprintf(block->gid,  B_HEADER_GID_SIZE,  B_HEADER_GID_FORMAT,  header->gid);
 
-    if (((uint8_t *)&header->size)[3]) {
+    if (header->size > B_HEADER_MAX_FILE_SIZE) {
         encode_base256_size(block, header->size);
     } else {
         snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_SIZE_FORMAT, header->size);

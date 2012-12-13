@@ -9,6 +9,8 @@
 #include "b_string.h"
 #include "b_file.h"
 
+#define B_HEADER_MAX_FILE_SIZE  8589934592
+
 #define B_HEADER_SIZE            B_BLOCK_SIZE
 #define B_HEADER_SUFFIX_SIZE   100
 #define B_HEADER_MODE_SIZE       8

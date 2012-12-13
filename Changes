@@ -1,3 +1,15 @@
+Version 0.9
+
+    * Resolve issues where files of certain sizes will cause no header value to
+      be written in the size field
+
+    * Ensure files >=8GB receive a proper base256-encoded size header field
+      value
+
+    * Implement a "ignore_errors" option which causes Archive::Tar::Builder to
+      not die() at the end of archiving a stream wherein non-fatal errors were
+      encountered
+
 Version 0.8
 
     * Implemented an error handling mechanism which allows the presentation of
