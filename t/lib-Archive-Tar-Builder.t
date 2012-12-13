@@ -20,7 +20,7 @@ use Symbol     ();
 
 use Archive::Tar::Builder ();
 
-use Test::More ( 'tests' => 45 );
+use Test::More ( 'tests' => 47 );
 
 sub find_tar {
     my @PATHS    = qw( /bin /usr/bin /usr/local/bin );
@@ -73,6 +73,34 @@ sub build_tree {
 
 my $badfile = '/dev/null/impossible';
 my $tar     = find_tar();
+
+SKIP: {
+    skip( 'Cannot test permissions failures as root', 2 ) if $< == 0;
+
+    my $tmp = File::Temp::tempdir( 'CLEANUP' => 1 );
+    my $dir = "$tmp/foo";
+
+    mkdir( $dir, 0000 );
+
+    my $builder = Archive::Tar::Builder->new( 'quiet' => 1 );
+
+    $builder->add($tmp);
+
+    open( my $fh, '>', '/dev/null' ) or die("Unable to open /dev/null: $!");
+
+    eval { $builder->write($fh); };
+
+    like( $@ => qr/^Delayed nonzero exit/, '$builder->write() still die()s with "quiet" but not "ignore_errors" for non-fatals' );
+
+    undef $@;
+
+    $builder = Archive::Tar::Builder->new(
+        'quiet'         => 1,
+        'ignore_errors' => 1
+    );
+
+    ok( !$@, '$builder->write() does not die() if "ignore_errors" is set for non-fatals' );
+}
 
 #
 # Test external functionality
@@ -336,10 +364,10 @@ my $tar     = find_tar();
 
 # Test error handling
 SKIP: {
-    skip 'Test will not work as root' unless $<;
+    skip( 'Test will not work as root', 1 ) unless $<;
 
     my $tmpdir = File::Temp::tempdir( 'CLEANUP' => 1 );
-    my $path   = "$tmpdir/foo";
+    my $path = "$tmpdir/foo";
 
     mkdir( $path, 0 );
 
@@ -348,9 +376,7 @@ SKIP: {
     my $builder = Archive::Tar::Builder->new( 'quiet' => 1 );
     $builder->add($tmpdir);
 
-    eval {
-        $builder->write($fh);
-    };
+    eval { $builder->write($fh); };
 
     like( $@ => qr/^Delayed nonzero exit/, '$builder->write() dies if any errors were encountered' );
 }

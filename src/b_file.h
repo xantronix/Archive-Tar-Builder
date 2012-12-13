@@ -1,7 +1,8 @@
 #ifndef _B_FILE_H
 #define _B_FILE_H
 
-#define B_BLOCK_SIZE 512
+#define B_BLOCK_SIZE  512
+#define B_BUFFER_SIZE B_BLOCK_SIZE
 
 #include <sys/types.h>
 #include "b_string.h"

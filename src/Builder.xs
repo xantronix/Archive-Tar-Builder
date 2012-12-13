@@ -24,6 +24,7 @@ typedef b_builder * Archive__Tar__Builder;
 
 struct builder_options {
     int quiet;
+    int ignore_errors;
 };
 
 static int builder_lookup(SV *cache, uid_t uid, gid_t gid, b_string **user, b_string **group) {
@@ -117,7 +118,8 @@ builder_new(klass, ...)
             croak("%s: %s", "malloc()", strerror(errno));
         }
 
-        options->quiet = 0;
+        options->quiet         = 0;
+        options->ignore_errors = 0;
 
         if ((builder = b_builder_new()) == NULL) {
             croak("%s: %s", "b_builder_new()", strerror(errno));
@@ -127,7 +129,8 @@ builder_new(klass, ...)
             char *key = SvPV_nolen(ST(i));
             SV *value = ST(i+1);
 
-            if (strcmp(key, "quiet") == 0 && SvIV(value)) options->quiet = 1;
+            if (strcmp(key, "quiet")         == 0 && SvIV(value)) options->quiet = 1;
+            if (strcmp(key, "ignore_errors") == 0 && SvIV(value)) options->ignore_errors = 1;
         }
 
         /*
@@ -282,6 +285,7 @@ builder_write(builder, fh)
             b_builder_member *member;
 
             if ((member = b_stack_item_at(builder->members, i)) == NULL) {
+                b_error_destroy(err);
                 croak("%s: %s", "b_stack_item_at()", strerror(errno));
             }
 
@@ -289,13 +293,17 @@ builder_write(builder, fh)
             ctx.path   = member->path;
 
             if (b_find(member->path, B_FIND_CALLBACK(b_builder_write_file), 0, &ctx) < 0) {
+                b_error_destroy(err);
                 croak("%s: %s: %s", "b_find()", member->path->str, strerror(errno));
             }
         }
 
-        if (b_error_status(err) != 0) {
+        if (!options->ignore_errors && b_error_status(err) != 0) {
+            b_error_destroy(err);
             croak("Delayed nonzero exit due to previous errors");
         }
+
+        b_error_destroy(err);
 
         RETVAL = ctx.total;
 

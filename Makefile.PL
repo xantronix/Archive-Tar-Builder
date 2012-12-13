@@ -13,6 +13,7 @@ $makefile->write(
     'LICENSE'      => 'perl',
     'ABSTRACT'     => 'Provides a braindead tarball builder thingie',
     'PMLIBDIRS'    => ['lib'],
+    'CCFLAGS'      => '-D_FILE_OFFSET_BITS=64',
 
     'PREREQ_PM'      => {},
     'BUILD_REQUIRES' => { 'Test::Simple' => '0.44' }

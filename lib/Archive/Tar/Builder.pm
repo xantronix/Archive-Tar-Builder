@@ -19,7 +19,7 @@ BEGIN {
     use vars qw(@ISA $VERSION);
 
     our @ISA     = qw(Exporter);
-    our $VERSION = '0.8';
+    our $VERSION = '0.9';
 }
 
 XSLoader::load( 'Archive::Tar::Builder', $VERSION );
@@ -53,6 +53,11 @@ Create a new Archive::Tar::Builder object.  The following options are honored:
 =item C<quiet>
 
 When set, warnings encountered when reading individual files are not reported.
+
+=item C<ignore_errors>
+
+When set, non-fatal errors raised while archiving individual files do not
+cause Archive::Tar::Builder to die() at the end of the stream.
 
 =back
 
