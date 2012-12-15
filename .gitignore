@@ -1,0 +1,7 @@
+*.o
+*.bs
+*.gcov
+*.gcda
+*.gcno
+Makefile
+src/Builder.c

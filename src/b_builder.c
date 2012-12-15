@@ -10,66 +10,25 @@
 #include "b_string.h"
 #include "b_header.h"
 #include "b_stack.h"
+#include "b_buffer.h"
 #include "b_builder.h"
 
-static b_builder_member *b_builder_member_new(char *path, char *member_name) {
-    b_builder_member *member;
-
-    if ((member = malloc(sizeof(*member))) == NULL) {
-        goto error_malloc;
-    }
-
-    if ((member->path = b_path_clean_str(path)) == NULL) {
-        goto error_path_clean;
-    }
-
-    if ((member->member_name = b_path_clean_str(member_name)) == NULL) {
-        goto error_path_clean_member_name;
-    }
-
-    /*
-     * It is quite important to compare the finished, cleaned variants of the given
-     * path and intended member name, as any differences in formatting provided by
-     * the user that otherwise have no semantic meaning may yield identically cleaned
-     * paths.
-     */
-    member->has_different_name = strcmp(member->path->str, member->member_name->str)? 1: 0;
-
-    return member;
-
-error_path_clean_member_name:
-    b_string_free(member->path);
-
-error_path_clean:
-    free(member);
-
-error_malloc:
-    return NULL;
-}
-
-static void b_builder_member_destroy(b_builder_member *member) {
-    b_string_free(member->path);
-    b_string_free(member->member_name);
-
-    member->path        = NULL;
-    member->member_name = NULL;
-
-    free(member);
-}
-
-b_builder *b_builder_new() {
+b_builder *b_builder_new(size_t block_factor) {
     b_builder *builder;
 
     if ((builder = malloc(sizeof(*builder))) == NULL) {
         goto error_malloc;
     }
 
-    if ((builder->members = b_stack_new(0)) == NULL) {
-        goto error_stack_new;
+    if ((builder->buf = b_buffer_new(block_factor? block_factor: B_BUFFER_DEFAULT_FACTOR)) == NULL) {
+        goto error_buffer_new;
     }
 
-    b_stack_set_destructor(builder->members, B_STACK_DESTRUCTOR(b_builder_member_destroy));
+    if ((builder->err = b_error_new()) == NULL) {
+        goto error_error_new;
+    }
 
+    builder->total          = 0;
     builder->match          = NULL;
     builder->lookup_service = NULL;
     builder->lookup_ctx     = NULL;
@@ -77,11 +36,26 @@ b_builder *b_builder_new() {
 
     return builder;
 
-error_stack_new:
+error_error_new:
+    b_buffer_destroy(builder->buf);
+
+error_buffer_new:
     free(builder);
 
 error_malloc:
     return NULL;
+}
+
+b_error *b_builder_get_error(b_builder *builder) {
+    if (builder == NULL) return NULL;
+
+    return builder->err;
+}
+
+b_buffer *b_builder_get_buffer(b_builder *builder) {
+    if (builder == NULL) return NULL;
+
+    return builder->buf;
 }
 
 void b_builder_set_data(b_builder *builder, void *data) {
@@ -97,30 +71,6 @@ void b_builder_set_data(b_builder *builder, void *data) {
 void b_builder_set_lookup_service(b_builder *builder, b_lookup_service service, void *ctx) {
     builder->lookup_service = service;
     builder->lookup_ctx     = ctx;
-}
-
-int b_builder_add_member_as(b_builder *builder, char *path, char *member_name) {
-    b_builder_member *member;
-
-    if ((member = b_builder_member_new(path, member_name)) == NULL) {
-        goto error_member_new;
-    }
-
-    if (b_stack_push(builder->members, member) == NULL) {
-        goto error_stack_push;
-    }
-
-    return 0;
-
-error_stack_push:
-    b_builder_member_destroy(member);
-
-error_member_new:
-    return -1;
-}
-
-int b_builder_add_member(b_builder *builder, char *path) {
-    return b_builder_add_member_as(builder, path, path);
 }
 
 int b_builder_is_excluded(b_builder *builder, const char *path) {
@@ -143,45 +93,24 @@ int b_builder_exclude_from_file(b_builder *builder, const char *file) {
     return lafe_exclude_from_file(&builder->match, file);
 }
 
-void b_builder_destroy(b_builder *builder) {
-    b_stack_destroy(builder->members);
-    lafe_cleanup_exclusions(&builder->match);
-
-    builder->members = NULL;
-    builder->match   = NULL;
-    builder->data    = NULL;
-
-    free(builder);
-}
-
-int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st) {
-    b_builder *builder       = ctx->builder;
-    b_header_block *block    = &ctx->block;
-    b_builder_member *member = ctx->member;
-    int fd                   = ctx->fd;
+int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_name, struct stat *st) {
+    b_buffer *buf = builder->buf;
+    b_error *err  = builder->err;
 
     int file_fd = 0;
-
-    b_string *new_member_name = NULL;
 
     ssize_t wrlen = 0;
 
     b_header *header;
+    b_header_block *block;
 
-    ctx->path = path;
-
-    if (ctx->err) {
-        b_error_clear(ctx->err);
+    if (buf == NULL) {
+        errno = EINVAL;
+        return -1;
     }
 
-    if (member->has_different_name) {
-        if ((new_member_name = b_string_dup(member->member_name)) == NULL) {
-            goto error_string_dup_member_name;
-        }
-
-        if (b_string_append_str(new_member_name, path->str + b_string_len(member->path)) == NULL) {
-            goto error_string_append_path;
-        }
+    if (err) {
+        b_error_clear(err);
     }
 
     /*
@@ -195,17 +124,17 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
 
     if ((st->st_mode & S_IFMT) == S_IFREG) {
         if ((file_fd = open(path->str, O_RDONLY)) < 0) {
-            if (ctx->err) {
-                b_error_set(ctx->err, B_ERROR_WARN, errno, "Cannot open file", path);
+            if (err) {
+                b_error_set(err, B_ERROR_WARN, errno, "Cannot open file", path);
             }
 
             goto error_open;
         }
     }
 
-    if ((header = b_header_for_file(path, new_member_name? new_member_name: path, st)) == NULL) {
-        if (ctx->err) {
-            b_error_set(ctx->err, B_ERROR_FATAL, errno, "Cannot build header for file", path);
+    if ((header = b_header_for_file(path, member_name, st)) == NULL) {
+        if (err) {
+            b_error_set(err, B_ERROR_FATAL, errno, "Cannot build header for file", path);
         }
 
         goto error_header_for_file;
@@ -220,8 +149,8 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
         b_string *user = NULL, *group = NULL;
 
         if (builder->lookup_service(builder->lookup_ctx, st->st_uid, st->st_gid, &user, &group) < 0) {
-            if (ctx->err) {
-                b_error_set(ctx->err, B_ERROR_WARN, errno, "Cannot lookup user and group for file", path);
+            if (err) {
+                b_error_set(err, B_ERROR_WARN, errno, "Cannot lookup user and group for file", path);
             }
 
             goto error_lookup;
@@ -240,6 +169,10 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
     if (header->truncated) {
         b_string *longlink_path;
 
+        if ((block = b_buffer_get_block(buf, B_HEADER_SIZE, &wrlen)) == NULL) {
+            goto error_get_header_block;
+        }
+
         if ((longlink_path = b_string_dup(path)) == NULL) {
             goto error_longlink_path_dup;
         }
@@ -254,61 +187,49 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
             goto error_header_encode;
         }
 
-        if ((wrlen = write(fd, block, sizeof(*block))) < 0) {
-            if (ctx->err) {
-                b_error_set(ctx->err, B_ERROR_FATAL, errno, "Cannot write file header", path);
+        builder->total += wrlen;
+
+        if ((wrlen = b_file_write_path_blocks(buf, longlink_path)) < 0) {
+            if (err) {
+                b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", path);
             }
 
             goto error_write;
         }
 
-        ctx->total += wrlen;
-
-        if ((wrlen = b_file_write_path_blocks(fd, longlink_path)) < 0) {
-            if (ctx->err) {
-                b_error_set(ctx->err, B_ERROR_FATAL, errno, "Cannot write long filename header", path);
-            }
-
-            goto error_write;
-        }
-
-        ctx->total += wrlen;
+        builder->total += wrlen;
     }
 
     /*
      * Then, of course, encode and write the real file header block.
      */
+    if ((block = b_buffer_get_block(buf, B_HEADER_SIZE, &wrlen)) == NULL) {
+        goto error_write;
+    }
+
     if (b_header_encode_block(block, header) == NULL) {
         goto error_header_encode;
     }
 
-    if ((wrlen = write(fd, block, sizeof(*block))) < 0) {
-        goto error_write;
-    }
-
-    ctx->total += wrlen;
+    builder->total += wrlen;
 
     /*
      * Finally, end by writing the file contents.
      */
     if (file_fd) {
-        if ((wrlen = b_file_write_contents(fd, file_fd)) < 0) {
-            if (ctx->err) {
-                b_error_set(ctx->err, B_ERROR_WARN, errno, "Cannot write file to archive", path);
+        if ((wrlen = b_file_write_contents(buf, file_fd)) < 0) {
+            if (err) {
+                b_error_set(err, B_ERROR_WARN, errno, "Cannot write file to archive", path);
             }
 
             goto error_write;
         }
 
-        ctx->total += wrlen;
+        builder->total += wrlen;
 
         close(file_fd);
 
         file_fd = 0;
-    }
-
-    if (new_member_name != NULL) {
-        b_string_free(new_member_name);
     }
 
     b_header_destroy(header);
@@ -318,6 +239,7 @@ int b_builder_write_file(b_builder_context *ctx, b_string *path, struct stat *st
 error_write:
 error_longlink_path_append:
 error_longlink_path_dup:
+error_get_header_block:
 error_header_encode:
 error_lookup:
     b_header_destroy(header);
@@ -328,11 +250,28 @@ error_header_for_file:
     }
 
 error_open:
-error_string_append_path:
-    if (new_member_name != NULL) {
-        b_string_free(new_member_name);
+    return -1;
+}
+
+void b_builder_destroy(b_builder *builder) {
+    if (builder == NULL) return;
+
+    if (builder->buf) {
+        b_buffer_destroy(builder->buf);
+        builder->buf = NULL;
     }
 
-error_string_dup_member_name:
-    return -1;
+    if (builder->err) {
+        b_error_destroy(builder->err);
+        builder->err = NULL;
+    }
+
+    builder->total = 0;
+    builder->data  = NULL;
+
+    lafe_cleanup_exclusions(&builder->match);
+
+    builder->match = NULL;
+
+    free(builder);
 }

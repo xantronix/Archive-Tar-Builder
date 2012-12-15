@@ -10,6 +10,8 @@ mk/MY.pm
 mk/MY/Makefile.pm
 src/b_builder.c
 src/b_builder.h
+src/b_buffer.c
+src/b_buffer.h
 src/b_error.c
 src/b_error.h
 src/b_file.c

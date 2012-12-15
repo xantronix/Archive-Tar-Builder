@@ -1,3 +1,42 @@
+Version 1.0
+
+    * Implement a large shared buffer; alleviate the need to copy tar file
+      headers and file contents from one place to another when reading and
+      writing
+
+    * Allow reading from the filesystem and writing to tar streams in large
+      blocks, thanks to a large shared buffer; no more reading and writing in
+      blocks of 512 bytes at a time, which becomes rather slow for very large
+      files
+
+    * Remove the need to memcpy() a new file header buffer for each file
+
+    * Allow the caller to specify a blocking factor in the constructor
+      Archive::Tar::Builder->new(), in multiples of 512 bytes
+
+    * Introduce a new Archive::Tar::Builder usage pattern; instead of allowing
+      caller to add "members" to the archive, new archive members are written
+      on-the-fly with the archive() and archive_as() methods, which are much
+      friendlier to making tarball streams from arbitrary parts of a filesystem
+
+    * Add 'flush()' method to Archive::Tar::Builder; allow caller to flush
+      buffers at the end of an archive
+
+    * Add 'finish()' method to Archive::Tar::Builder; allow caller to flush
+      buffers and die() if any errors are encountered at the end of an archive
+
+    * Use breadth-first, not depth-first, recursion in src/b_find.c, to prevent
+      loss of items upon extraction
+
+    * Add a 'follow_symlinks' option to Archive::Tar::Builder->new()
+
+    * Resolve an issue wherein certain long paths are split incorrectly
+
+    * Strip any leading slashes from paths generated while archiving
+
+    * As a bonus, much of the codebase has been simplified due to the unified
+      usage of a large shared buffer
+
 Version 0.9
 
     * Resolve issues where files of certain sizes will cause no header value to

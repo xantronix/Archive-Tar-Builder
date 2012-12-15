@@ -20,7 +20,7 @@ use Symbol     ();
 
 use Archive::Tar::Builder ();
 
-use Test::More ( 'tests' => 47 );
+use Test::More ( 'tests' => 50 );
 
 sub find_tar {
     my @PATHS    = qw( /bin /usr/bin /usr/local/bin );
@@ -53,6 +53,7 @@ sub build_tree {
     File::Path::mkpath("$tmpdir/foo/bar/baz/foo/cats");
     File::Path::mkpath("$tmpdir/foo/poop");
     File::Path::mkpath("$tmpdir/foo/cats/meow");
+    File::Path::mkpath("$tmpdir/home/prrr/1327342027.M926735P26547V000000000000FD00I0000000001888287_0.one.two.threefour.five.S=2486:2.");
 
     open( my $fh, '>', $file ) or die("Unable to open $file for writing: $!");
     print {$fh} "cats\n";
@@ -74,6 +75,22 @@ sub build_tree {
 my $badfile = '/dev/null/impossible';
 my $tar     = find_tar();
 
+{
+    my $builder = Archive::Tar::Builder->new;
+
+    eval { $builder->archive(); };
+
+    like( $@ => qr/No paths to archive specified/, '$builder->archive() dies if no paths are specified' );
+
+    eval { $builder->archive('foo'); };
+
+    like( $@ => qr/No file handle set/, '$builder->archive() dies if no file handle is set' );
+
+    eval { $builder->archive_as( 'foo' => 'bar' ); };
+
+    like( $@ => qr/No file handle set/, '$builder->archive_as() dies if no file handle is set' );
+}
+
 SKIP: {
     skip( 'Cannot test permissions failures as root', 2 ) if $< == 0;
 
@@ -84,13 +101,14 @@ SKIP: {
 
     my $builder = Archive::Tar::Builder->new( 'quiet' => 1 );
 
-    $builder->add($tmp);
-
     open( my $fh, '>', '/dev/null' ) or die("Unable to open /dev/null: $!");
 
-    eval { $builder->write($fh); };
+    $builder->set_handle($fh);
+    $builder->archive($tmp);
 
-    like( $@ => qr/^Delayed nonzero exit/, '$builder->write() still die()s with "quiet" but not "ignore_errors" for non-fatals' );
+    eval { $builder->finish(); };
+
+    like( $@ => qr/^Delayed nonzero exit/, '$builder->finish() still die()s with "quiet" but not "ignore_errors" for non-fatals' );
 
     undef $@;
 
@@ -99,7 +117,12 @@ SKIP: {
         'ignore_errors' => 1
     );
 
-    ok( !$@, '$builder->write() does not die() if "ignore_errors" is set for non-fatals' );
+    $builder->set_handle($fh);
+    $builder->archive($tmp);
+
+    eval { $builder->finish(); };
+
+    ok( !$@, '$builder->finish() does not die() if "ignore_errors" is set for non-fatals' );
 }
 
 #
@@ -113,9 +136,12 @@ SKIP: {
 
     my $archive = Archive::Tar::Builder->new;
 
-    $archive->add('foo');
-    $archive->add_as( 'foo' => 'bar' );
-    $archive->add_as( 'foo' => 'baz' );
+    my %paths = (
+        'foo'  => 'foo',
+        'bar'  => 'foo',
+        'baz'  => 'foo',
+        'home' => 'home'
+    );
 
     #
     # Test Archive::Tar::Builder's ability to exclude files
@@ -132,12 +158,21 @@ SKIP: {
     my $reader_pid = IPC::Open3::open3( my ( $in, $out ), undef, $tar, '-tf', '-' );
     my $writer_pid = fork();
 
+    $archive->set_handle($in);
+
     if ( !defined $writer_pid ) {
         die("Unable to fork(): $!");
     }
     elsif ( $writer_pid == 0 ) {
         close $out;
-        $archive->write($in);
+
+        foreach my $member ( sort keys %paths ) {
+            my $path = $paths{$member};
+
+            $archive->archive_as( $path => $member );
+        }
+
+        $archive->finish();
 
         #
         # This may seem a bit gratuitous, but this is needed because Perl 5.6.2's
@@ -160,6 +195,7 @@ SKIP: {
       bar/exclude.txt
       bar/bar/
       bar/poop/
+      home/prrr/1327342027.M926735P26547V000000000000FD00I0000000001888287_0.one.two.threefour.five.S=2486:2./
     );
 
     my $entries    = scalar keys %EXPECTED;
@@ -185,12 +221,12 @@ SKIP: {
         $_ => $? >> 8;
     } ( $writer_pid, $reader_pid );
 
-    is( $found, $entries, '$archive->write() wrote the appropriate number of items' );
-    is( $statuses{$writer_pid} => 0, '$archive->write() subprocess exited with 0 status' );
-    is( $statuses{$reader_pid} => 0, 'tar subprocess exited with 0 status' );
+    is( $found                 => $entries, '$archive->finish() wrote the appropriate number of items' );
+    is( $statuses{$writer_pid} => 0,        '$archive->finish() subprocess exited with 0 status' );
+    is( $statuses{$reader_pid} => 0,        'tar subprocess exited with 0 status' );
 
     #
-    # Exercise $archive->write() in the parent process; we cannot capture output
+    # Exercise $archive->finish() in the parent process; we cannot capture output
     # if we are to do this reliably.
     #
     pipe my $in_read, $in or die("Unable to pipe(): $!");
@@ -210,9 +246,17 @@ SKIP: {
 
     close $in_read;
 
-    eval { $archive->write($in); };
+    $archive->set_handle($in);
 
-    is( $@ => '', '$archive->write() does not die when writing to handle' );
+    foreach my $member ( sort keys %paths ) {
+        my $path = $paths{$member};
+
+        $archive->archive_as( $path => $member );
+    }
+
+    eval { $archive->finish(); };
+
+    is( $@ => '', '$archive->finish() does not die when writing to handle' );
 
     close $in;
     waitpid( $pid, 0 );
@@ -374,11 +418,12 @@ SKIP: {
     open( my $fh, '>', '/dev/null' );
 
     my $builder = Archive::Tar::Builder->new( 'quiet' => 1 );
-    $builder->add($tmpdir);
+    $builder->set_handle($fh);
+    $builder->archive($tmpdir);
 
-    eval { $builder->write($fh); };
+    eval { $builder->finish(); };
 
-    like( $@ => qr/^Delayed nonzero exit/, '$builder->write() dies if any errors were encountered' );
+    like( $@ => qr/^Delayed nonzero exit/, '$builder->finish() dies if any errors were encountered' );
 }
 
 # Test long filenames, symlinks
@@ -391,7 +436,6 @@ SKIP: {
     symlink( 'foo', "$tmpdir/bar" ) or die("Unable to symlink() $tmpdir/bar to foo: $!");
 
     my $archive = Archive::Tar::Builder->new;
-    $archive->add($tmpdir);
 
     my $err = Symbol::gensym();
 
@@ -402,7 +446,9 @@ SKIP: {
         die("Unable to fork(): $!");
     }
     elsif ( $writer_pid == 0 ) {
-        $archive->write($in);
+        $archive->set_handle($in);
+        $archive->archive($tmpdir);
+        $archive->flush();
         exec( '/bin/sh', '-c', 'true' );
     }
 
@@ -460,12 +506,18 @@ SKIP: {
         $_ => $? >> 8;
     } ( $reader_pid, $writer_pid );
 
-    foreach my $item ( split "\n", $errors ) {
-        diag("From standard error: $item");
+    if ($errors) {
+        foreach my $item ( split "\n", $errors ) {
+            diag("From standard error: $item");
+        }
     }
 
-    is( $statuses{$writer_pid} => 0, '$archive->write() did not die while archiving long pathnames' );
+    is( $statuses{$writer_pid} => 0, '$archive->finish() did not die while archiving long pathnames' );
     is( $statuses{$reader_pid} => 0, 'tar -tf - did not die while parsing tar stream with long pathnames' );
-    ok( $FOUND{$path},         "\$archive->write() properly encoded a long pathname for directory for $path" );
-    ok( $FOUND{"$tmpdir/bar"}, '$archive->write properly encoded a symlink' );
+    ok( $FOUND{$path}, "\$archive->finish() properly encoded a long pathname for directory for $path" );
+
+    my $expected_symlink = "$tmpdir/bar";
+    $expected_symlink =~ s/^\///;
+
+    ok( $FOUND{$expected_symlink}, '$archive->archive() properly encoded a symlink' );
 }

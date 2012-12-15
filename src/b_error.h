@@ -32,6 +32,7 @@ int        b_error_status(b_error *err);
 int        b_error_errno(b_error *err);
 b_string * b_error_path(b_error *err);
 b_string * b_error_message(b_error *err);
+void       b_error_reset(b_error *err);
 void       b_error_destroy(b_error *err);
 
 #endif /* _B_ERROR_H */

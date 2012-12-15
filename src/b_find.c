@@ -10,6 +10,7 @@
 #include "b_stack.h"
 #include "b_path.h"
 #include "b_find.h"
+#include "b_error.h"
 
 static inline int b_stat(b_string *path, struct stat *st, int flags) {
     int (*statfn)(const char *, struct stat *) = (flags & B_FIND_FOLLOW_SYMLINKS)? stat: lstat;
@@ -50,13 +51,17 @@ error_malloc:
 }
 
 static void b_dir_close(b_dir *item) {
-    closedir(item->dp);
+    if (item->dp) {
+        closedir(item->dp);
+    }
 }
 
 static void b_dir_destroy(b_dir *item) {
-    b_dir_close(item);
-    b_string_free(item->path);
+    if (item == NULL) return;
 
+    b_dir_close(item);
+
+    b_string_free(item->path);
     item->path = NULL;
 
     free(item);
@@ -134,32 +139,67 @@ error_readdir:
 }
 
 static void b_dir_item_free(b_dir_item *item) {
+    if (item == NULL) return;
+
     b_string_free(item->name);
+    item->name = NULL;
+
     b_string_free(item->path);
+    item->path = NULL;
 
     free(item->st);
-
-    item->name = NULL;
-    item->path = NULL;
-    item->st   = NULL;
+    item->st = NULL;
 
     free(item);
+}
+
+static b_string *subst_member_name(b_string *path, b_string *member_name, b_string *current) {
+    b_string *new_member_name = NULL;
+
+    /*
+     * If the path prefix differs from the member name, then replace the start
+     * of the path with the member name as the caller wishes it to be.
+     */
+    if (strcmp(path->str, member_name->str) != 0) {
+        if ((new_member_name = b_string_dup(member_name)) == NULL) {
+            goto error_string_dup;
+        }
+
+        if (b_string_append_str(new_member_name, current->str + b_string_len(path)) == NULL) {
+            goto error_string_append;
+        }
+    }
+
+    return new_member_name;
+
+error_string_append:
+    b_string_free(new_member_name);
+
+error_string_dup:
+    return NULL;
 }
 
 /*
  * callback() should return a 0 or 1; 0 to indicate that traversal at the current
  * level should halt, or 1 that it should continue.
  */
-int b_find(b_string *path, b_find_callback callback, int flags, b_builder_context *ctx) {
+int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_callback callback, int flags) {
     b_stack *dirs;
-    struct stat st;
     b_dir *dir;
+    struct stat st;
     int res;
 
-    b_string *cleanpath;
+    b_error *err = b_builder_get_error(builder);
 
-    if ((cleanpath = b_path_clean(path)) == NULL) {
+    b_string *clean_path;
+    b_string *clean_member_name;
+
+    if ((clean_path = b_path_clean(path)) == NULL) {
         goto error_path_clean;
+    }
+
+    if ((clean_member_name = b_path_clean(member_name)) == NULL) {
+        goto error_path_clean_member_name;
     }
 
     if ((dirs = b_stack_new(0)) == NULL) {
@@ -168,7 +208,7 @@ int b_find(b_string *path, b_find_callback callback, int flags, b_builder_contex
 
     b_stack_set_destructor(dirs, B_STACK_DESTRUCTOR(b_dir_destroy));
 
-    if (b_stat(cleanpath, &st, flags) < 0) {
+    if (b_stat(clean_path, &st, flags) < 0) {
         goto error_stat;
     }
 
@@ -177,21 +217,21 @@ int b_find(b_string *path, b_find_callback callback, int flags, b_builder_contex
      * callback, then do not bother with traversal code.  Otherwise, all code after
      * these guard clauses pertains to the case of 'path' being a directory.
      */
-    res = callback(ctx, cleanpath, &st);
+    res = callback(builder, clean_path, clean_member_name, &st);
 
     if (res == 0) {
         goto cleanup;
     } else if (res < 0) {
-        goto error_callback_top;
+        goto error_callback;
     }
 
     if ((st.st_mode & S_IFMT) != S_IFDIR) {
         return 0;
     }
 
-    if ((dir = b_dir_open(cleanpath)) == NULL) {
-        if (ctx->err) {
-            b_error_set(ctx->err, B_ERROR_WARN, errno, "Unable to open directory", cleanpath);
+    if ((dir = b_dir_open(clean_path)) == NULL) {
+        if (err) {
+            b_error_set(err, B_ERROR_WARN, errno, "Unable to open directory", clean_path);
         }
 
         goto error_dir_open;
@@ -201,65 +241,86 @@ int b_find(b_string *path, b_find_callback callback, int flags, b_builder_contex
         goto error_stack_push;
     }
 
-    while ((dir = b_stack_pop(dirs)) != NULL) {
+    while (1) {
         b_dir_item *item;
+        b_string *new_member_name;
+        b_dir *cwd = b_stack_top(dirs);
 
-        while ((item = b_dir_read(dir, flags)) != NULL) {
-            if (strcmp(item->name->str, ".") == 0 || strcmp(item->name->str, "..") == 0) {
-                goto cleanup_item;
+        if (cwd == NULL) {
+            break;
+        }
+
+        if ((item = b_dir_read(cwd, flags)) == NULL) {
+            b_dir *oldcwd = b_stack_pop(dirs);
+
+            if (oldcwd) {
+                b_dir_destroy(oldcwd);
             }
 
-            res = callback(ctx, item->path, item->st);
+            continue;
+        }
 
-            if (res == 0) {
+        if (strcmp(item->name->str, ".") == 0 || strcmp(item->name->str, "..") == 0) {
+            goto cleanup_item;
+        }
+
+        /*
+         * Attempt to obtain and use a substituted member name based on the
+         * real path, and use it, if possible.
+         */
+        new_member_name = subst_member_name(clean_path, clean_member_name, item->path);
+
+        res = callback(builder, item->path, new_member_name? new_member_name: item->path, item->st);
+
+        b_string_free(new_member_name);
+
+        if (res == 0) {
+            goto cleanup_item;
+        } else if (res < 0) {
+            if (err && !b_error_fatal(err)) {
                 goto cleanup_item;
-            } else if (res < 0) {
-                if (ctx->err && !b_error_fatal(ctx->err)) {
+            } else {
+                goto error_item;
+            }
+        }
+
+        if ((item->st->st_mode & S_IFMT) == S_IFDIR) {
+            b_dir *newdir;
+
+            if ((newdir = b_dir_open(item->path)) == NULL) {
+                if (err) {
+                    b_error_set(err, B_ERROR_WARN, errno, "Unable to open directory", item->path);
+                }
+
+                if (errno == EACCES) {
                     goto cleanup_item;
                 } else {
                     goto error_item;
                 }
             }
 
-            if ((item->st->st_mode & S_IFMT) == S_IFDIR) {
-                b_dir *newdir;
+            if (b_stack_push(dirs, newdir) == NULL) {
+                b_dir_destroy(newdir);
 
-                if ((newdir = b_dir_open(item->path)) == NULL) {
-                    if (ctx->err) {
-                        b_error_set(ctx->err, B_ERROR_WARN, errno, "Unable to open directory", item->path);
-                    }
-
-                    if (errno == EACCES) {
-                        goto cleanup_item;
-                    } else {
-                        goto error_item;
-                    }
-                }
-
-                if (b_stack_push(dirs, newdir) == NULL) {
-                    b_dir_destroy(newdir);
-
-                    goto error_stack_push;
-                }
+                goto error_stack_push;
             }
-
-cleanup_item:
-            b_dir_item_free(item);
-
-            continue;
-
-error_item:
-            b_dir_item_free(item);
-
-            goto error_cleanup;
         }
 
-        b_dir_destroy(dir);
+cleanup_item:
+        b_dir_item_free(item);
+
+        continue;
+
+error_item:
+        b_dir_item_free(item);
+
+        goto error_cleanup;
     }
 
 cleanup:
     b_stack_destroy(dirs);
-    b_string_free(cleanpath);
+    b_string_free(clean_path);
+    b_string_free(clean_member_name);
 
     return 0;
 
@@ -268,12 +329,15 @@ error_stack_push:
     b_dir_destroy(dir);
 
 error_dir_open:
-error_callback_top:
+error_callback:
 error_stat:
     b_stack_destroy(dirs);
 
 error_stack_new:
-    b_string_free(cleanpath);
+    b_string_free(clean_member_name);
+
+error_path_clean_member_name:
+    b_string_free(clean_path);
 
 error_path_clean:
     return -1;

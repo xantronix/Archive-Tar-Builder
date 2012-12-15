@@ -18,6 +18,8 @@ b_stack * b_stack_new(size_t grow_by);
 void      b_stack_set_destructor(b_stack *stack, void (*destructor)(void *));
 void *    b_stack_push(b_stack *stack, void *item);
 void *    b_stack_pop(b_stack *stack);
+void *    b_stack_shift(b_stack *stack);
+void *    b_stack_top(b_stack *stack);
 void *    b_stack_item_at(b_stack *stack, size_t index);
 size_t    b_stack_count(b_stack *stack);
 b_stack * b_stack_reverse(b_stack *stack);
