@@ -37,8 +37,8 @@ void b_error_set(b_error *err, enum b_error_type type, int _errno, char *message
     err->_errno = _errno;
     err->status = -1;
 
-    if (err->message) b_string_free(err->message);
-    if (err->path)    b_string_free(err->path);
+    b_string_free(err->message);
+    b_string_free(err->path);
 
     if ((err->message = b_string_new(message)) == NULL) {
         goto error_string_dup_message;
@@ -66,15 +66,11 @@ void b_error_clear(b_error *err) {
     err->type   = B_ERROR_OK;
     err->_errno = 0;
 
-    if (err->message) {
-        b_string_free(err->message);
-        err->message = NULL;
-    }
+    b_string_free(err->message);
+    err->message = NULL;
 
-    if (err->path) {
-        b_string_free(err->path);
-        err->path = NULL;
-    }
+    b_string_free(err->path);
+    err->path = NULL;
 }
 
 void b_error_warn(b_error *err) {
@@ -116,18 +112,27 @@ b_string *b_error_path(b_error *err) {
     return err->path;
 }
 
+void b_error_reset(b_error *err) {
+    if (err == NULL) return;
+
+    b_string_free(err->message);
+    err->message = NULL;
+
+    b_string_free(err->path);
+    err->path = NULL;
+
+    err->status = 0;
+    err->_errno = 0;
+}
+
 void b_error_destroy(b_error *err) {
     if (err == NULL) return;
 
-    if (err->message) {
-        b_string_free(err->message);
-        err->message = NULL;
-    }
+    b_string_free(err->message);
+    err->message = NULL;
 
-    if (err->path) {
-        b_string_free(err->path);
-        err->path = NULL;
-    }
+    b_string_free(err->path);
+    err->path = NULL;
 
     err->status   = 0;
     err->_errno   = 0;

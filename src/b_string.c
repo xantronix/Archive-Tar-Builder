@@ -93,6 +93,8 @@ size_t b_string_len(b_string *string) {
 }
 
 void b_string_free(b_string *string) {
+    if (string == NULL) return;
+
     free(string->str);
     string->str = NULL;
 

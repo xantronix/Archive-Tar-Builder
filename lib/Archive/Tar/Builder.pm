@@ -19,7 +19,7 @@ BEGIN {
     use vars qw(@ISA $VERSION);
 
     our @ISA     = qw(Exporter);
-    our $VERSION = '0.9';
+    our $VERSION = '1.0';
 }
 
 XSLoader::load( 'Archive::Tar::Builder', $VERSION );
@@ -50,6 +50,11 @@ Create a new Archive::Tar::Builder object.  The following options are honored:
 
 =over
 
+=item C<block_factor>
+
+Specifies the size of the read and write buffer maintained by
+Archive::Tar::Builder in multiples of 512 bytes.  Default value is 20.
+
 =item C<quiet>
 
 When set, warnings encountered when reading individual files are not reported.
@@ -59,24 +64,11 @@ When set, warnings encountered when reading individual files are not reported.
 When set, non-fatal errors raised while archiving individual files do not
 cause Archive::Tar::Builder to die() at the end of the stream.
 
-=back
+=item C<follow_symlinks>
+
+When set, symlinks encountered while archiving are followed.
 
 =back
-
-=head1 ADDING MEMBERS TO ARCHIVE
-
-=over
-
-=item C<$archive-E<gt>add_as(%members)>
-
-Add any number of members to the current archive, where the keys specified in
-C<%members> specify the paths where the files exist on the filesystem, and the
-values shall represent the eventual names of the members as they shall be
-written upon archive writing.
-
-=item C<$archive->E<gt>add(@paths)>
-
-Add any number of members to the current archive.
 
 =back
 
@@ -142,32 +134,46 @@ the given path is to be excluded from the archive upon writing.
 
 =back
 
-=cut
-
-sub is_excluded {
-    my ( $self, $path ) = @_;
-
-    return $self->{'match'}->is_excluded($path);
-}
-
 =head1 WRITING ARCHIVE DATA
 
 =over
 
-=item C<$archive-E<gt>write($handle)>
+=item C<$archive-E<gt>set_handle($handle)>
+
+Set the output file handle to C<$handle>.  This method must be called once prior
+to archiving file data.
+
+=item C<$archive-E<gt>archive_as(%files)>
 
 Write a tar stream of ustar format, with GNU tar extensions for supporting long
-filenames and other POSIX extensions for files >8GB.  Files will be included
-or excluded based on any possible previous usage of the filename inclusion and
-exclusion calls.  Members will be written with the names given to them when they
-were added to the archive, whether C<$archive-E<gt>add()> or
-C<$archive-E<gt>add_as()> was used.
+filenames and other POSIX extensions for files >8GB.  C<%files> should contain
+key/value pairs listing the names of files and directories as they exist on the
+filesystem, with values being the names the caller wishes said members to be
+represented as in the archive.
 
+Files will be included or excluded based on any possible previous usage of the
+filename inclusion and exclusion calls.
 Returns the total number of bytes written.
 
-=item C<$archive-E<gt>start($handle)>
+=item C<$archive-E<gt>archive(@files)>
 
-A synonym for C<$archive-E<gt>write($handle)>.
+Similar to above, however no filename substitution is performed when archiving
+members.
+
+=back
+
+=head1 CLEANING UP
+
+=over
+
+=item C<$archive-E<gt>flush()>
+
+Flush the output stream.
+
+=item C<$archive-E<gt>finish()>
+
+Flush the output stream, and die() if any errors were recorded, and the option
+C<ignore_errors> is not enabled.  Finally, reset any other error data present.
 
 =back
 

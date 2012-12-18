@@ -57,23 +57,21 @@ static inline int is_big_endian() {
     return ((uint8_t *)&num)[1];
 }
 
-static inline void encode_base256_size(b_header_block *block, uint64_t value) {
+static inline void encode_base256_value(unsigned char *field, size_t len, uint64_t value) {
     size_t i;
     size_t value_size = sizeof(value);
-    size_t offset     = B_HEADER_SIZE_SIZE - value_size;
-
-    memset(block->size, 0x00, B_HEADER_SIZE_SIZE);
+    size_t offset     = len - value_size;
 
     for (i=0; i<value_size; i++) {
         int from_i = is_big_endian()? i: value_size - i - 1;
 
-        block->size[offset + i] = ((uint8_t *)&value)[from_i];
+        field[offset + i] = ((uint8_t *)&value)[from_i];
     }
 
     /*
      * Set the uppermost bit to indicate a base256-encoded size value.
      */
-    block->size[0] |= 0x80;
+    field[0] |= 0x80;
 }
 
 static inline void encode_checksum(b_header_block *block) {
@@ -84,8 +82,6 @@ static inline void encode_checksum(b_header_block *block) {
 }
 
 b_header_block *b_header_encode_block(b_header_block *block, b_header *header) {
-    memset(block, 0x00, sizeof(*block));
-
     if (header->suffix) {
         strncpy(block->suffix, header->suffix->str, 100);
     }
@@ -95,7 +91,7 @@ b_header_block *b_header_encode_block(b_header_block *block, b_header *header) {
     snprintf(block->gid,  B_HEADER_GID_SIZE,  B_HEADER_GID_FORMAT,  header->gid);
 
     if (header->size > B_HEADER_MAX_FILE_SIZE) {
-        encode_base256_size(block, header->size);
+        encode_base256_value(block->size, B_HEADER_SIZE_SIZE, header->size);
     } else {
         snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_SIZE_FORMAT, header->size);
     }
@@ -133,8 +129,6 @@ b_header_block *b_header_encode_block(b_header_block *block, b_header *header) {
 }
 
 b_header_block *b_header_encode_longlink_block(b_header_block *block, b_string *path) {
-    memset(block, 0x00, B_HEADER_SIZE);
-
     memcpy(  block->magic,  B_HEADER_MAGIC,       B_HEADER_MAGIC_SIZE);
     snprintf(block->suffix, B_HEADER_SUFFIX_SIZE, B_HEADER_LONGLINK_PATH);
     snprintf(block->size,   B_HEADER_SIZE_SIZE,   B_HEADER_SIZE_FORMAT,   b_string_len(path));
@@ -151,6 +145,7 @@ static struct path_data *path_split(b_string *path, struct stat *st) {
 
     b_stack *prefix_items, *suffix_items;
     size_t prefix_size = 0, suffix_size = 0;
+    int add_to_prefix = 0;
 
     b_stack *parts;
     b_string *item;
@@ -177,8 +172,23 @@ static struct path_data *path_split(b_string *path, struct stat *st) {
 
     data->truncated = 0;
 
+    if (b_stack_count(parts) == 0) {
+        goto error_empty_stack;
+    }
+
+    /*
+     * Strip the leading / from the path, if present.
+     */
+    if (b_string_len(b_stack_item_at(parts, 0)) == 0) {
+        b_string *leading = b_stack_shift(parts);
+
+        b_string_free(leading);
+    }
+
     while ((item = b_stack_pop(parts)) != NULL) {
-        int add_to_prefix = (suffix_size + item->len >= B_HEADER_SUFFIX_SIZE)? 1: 0;
+        if (suffix_size + item->len >= B_HEADER_SUFFIX_SIZE) {
+            add_to_prefix = 1;
+        }
 
         if (add_to_prefix) {
             if (prefix_size) prefix_size++; /* Add 1 to make room for path separator */
@@ -237,6 +247,7 @@ error_suffix:
 
 error_prefix:
 error_item:
+error_empty_stack:
     b_stack_destroy(suffix_items);
 
 error_suffix_items:
@@ -319,6 +330,8 @@ int b_header_set_usernames(b_header *header, b_string *user, b_string *group) {
 }
 
 void b_header_destroy(b_header *header) {
+    if (header == NULL) return;
+
     if (header->prefix != NULL) {
         b_string_free(header->prefix);
     }

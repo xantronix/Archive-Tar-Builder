@@ -77,12 +77,14 @@ void *b_stack_pop(b_stack *stack) {
     size_t index;
     void *item;
 
-    if (stack->count == 0) {
-        return NULL;
-    }
+    if (stack == NULL)     return NULL;
+    if (stack->count == 0) return NULL;
 
     index = stack->count - 1;
     item  = stack->items[index];
+
+    stack->items[index] = NULL;
+    stack->count--;
 
     if (index == stack->size - (stack->growth_factor * 2)) {
         if (b_stack_resize(stack, stack->count - stack->growth_factor) == NULL) {
@@ -90,13 +92,46 @@ void *b_stack_pop(b_stack *stack) {
         }
     }
 
-    stack->items[index] = NULL;
+    return item;
+
+error_resize:
+    return NULL;
+}
+
+void *b_stack_shift(b_stack *stack) {
+    size_t i, last;
+    void *item;
+
+    if (stack == NULL)     return NULL;
+    if (stack->count == 0) return NULL;
+
+    last = stack->count - 1;
+    item = stack->items[0];
+
+    for (i=1; i<stack->count; i++) {
+        stack->items[i-1] = stack->items[i];
+    }
+
+    stack->items[last] = NULL;
     stack->count--;
+
+    if (last == stack->size - (stack->growth_factor * 2)) {
+        if (b_stack_resize(stack, stack->count - stack->growth_factor) == NULL) {
+            goto error_resize;
+        }
+    }
 
     return item;
 
 error_resize:
     return NULL;
+}
+
+void *b_stack_top(b_stack *stack) {
+    if (stack == NULL)     return NULL;
+    if (stack->count == 0) return NULL;
+
+    return stack->items[stack->count - 1];
 }
 
 void *b_stack_item_at(b_stack *stack, size_t index) {
@@ -126,6 +161,8 @@ b_stack *b_stack_reverse(b_stack *stack) {
 
 void b_stack_destroy(b_stack *stack) {
     size_t i;
+
+    if (stack == NULL) return;
 
     if (stack->destructor) {
         for (i=0; i<stack->count; i++) {

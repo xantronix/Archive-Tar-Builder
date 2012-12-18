@@ -23,8 +23,10 @@
 typedef b_builder * Archive__Tar__Builder;
 
 struct builder_options {
-    int quiet;
-    int ignore_errors;
+    int    quiet;
+    int    ignore_errors;
+    int    follow_symlinks;
+    size_t block_factor;
 };
 
 static int builder_lookup(SV *cache, uid_t uid, gid_t gid, b_string **user, b_string **group) {
@@ -92,10 +94,20 @@ error_lookup:
     return -1;
 }
 
-void builder_warn(b_error *err) {
+static void builder_warn(b_error *err) {
     if (err == NULL) return;
 
     warn("%s: %s: %s", b_error_path(err)->str, b_error_message(err)->str, strerror(b_error_errno(err)));
+}
+
+static int find_flags(struct builder_options *options) {
+    int flags = 0;
+
+    if (options == NULL) return 0;
+
+    if (options->follow_symlinks) flags |= B_FIND_FOLLOW_SYMLINKS;
+
+    return flags;
 }
 
 MODULE = Archive::Tar::Builder PACKAGE = Archive::Tar::Builder PREFIX = builder_
@@ -106,6 +118,7 @@ builder_new(klass, ...)
 
     CODE:
         b_builder *builder;
+        b_error *err;
         SV *cache = NULL;
         I32 i, retc;
         struct builder_options *options;
@@ -118,19 +131,29 @@ builder_new(klass, ...)
             croak("%s: %s", "malloc()", strerror(errno));
         }
 
-        options->quiet         = 0;
-        options->ignore_errors = 0;
-
-        if ((builder = b_builder_new()) == NULL) {
-            croak("%s: %s", "b_builder_new()", strerror(errno));
-        }
+        options->quiet           = 0;
+        options->ignore_errors   = 0;
+        options->block_factor    = 0;
+        options->follow_symlinks = 0;
 
         for (i=1; i<items; i+=2) {
             char *key = SvPV_nolen(ST(i));
             SV *value = ST(i+1);
 
-            if (strcmp(key, "quiet")         == 0 && SvIV(value)) options->quiet = 1;
-            if (strcmp(key, "ignore_errors") == 0 && SvIV(value)) options->ignore_errors = 1;
+            if (strcmp(key, "quiet")           == 0 && SvIV(value)) options->quiet           = 1;
+            if (strcmp(key, "ignore_errors")   == 0 && SvIV(value)) options->ignore_errors   = 1;
+            if (strcmp(key, "block_factor")    == 0 && SvIV(value)) options->block_factor    = SvIV(value);
+            if (strcmp(key, "follow_symlinks") == 0 && SvIV(value)) options->follow_symlinks = 1;
+        }
+
+        if ((builder = b_builder_new(options->block_factor)) == NULL) {
+            croak("%s: %s", "b_builder_new()", strerror(errno));
+        }
+
+        err = b_builder_get_error(builder);
+
+        if (!options->quiet) {
+            b_error_set_callback(err, B_ERROR_CALLBACK(builder_warn));
         }
 
         /*
@@ -160,57 +183,7 @@ builder_DESTROY(builder)
     Archive::Tar::Builder builder
 
     CODE:
-        if (builder->lookup_ctx != NULL) {
-            SvREFCNT_dec(builder->lookup_ctx);
-        }
-
         b_builder_destroy(builder);
-
-void
-builder_add_as(builder, ...)
-    Archive::Tar::Builder builder
-
-    CODE:
-        I32 i;
-
-        if ((items - 1) % 2 != 0) {
-            croak("Uneven number of arguments passed; must be in 'path' => 'member_name' format");
-        }
-
-        for (i=1; i<items; i+=2) {
-            char *path        = SvPV_nolen(ST(i));
-            char *member_name = SvPV_nolen(ST(i+1));
-
-            if (b_builder_add_member_as(builder, path, member_name) < 0) {
-                croak("%s: %s => %s: %s", "b_builder_add_member_as()", path, member_name, strerror(errno));
-            }
-        }
-
-void
-builder_add(builder, ...)
-    Archive::Tar::Builder builder
-
-    CODE:
-        I32 i;
-
-        for (i=1; i<items; i++) {
-            char *path = SvPV_nolen(ST(i));
-
-            if (b_builder_add_member(builder, path) < 0) {
-                croak("%s: %s: %s", "b_builder_add_member()", path, strerror(errno));
-            }
-        }
-
-int
-builder_is_excluded(builder, path)
-    Archive::Tar::Builder builder
-    const char *path
-
-    CODE:
-        RETVAL = b_builder_is_excluded(builder, path);
-
-    OUTPUT:
-        RETVAL
 
 void
 builder_include(builder, pattern)
@@ -252,60 +225,145 @@ builder_exclude_from_file(builder, file)
             croak("Cannot add items to exclusion list from file %s: %s", file, strerror(errno));
         }
 
-size_t
-builder_write(builder, fh)
+int
+builder_is_excluded(builder, path)
+    Archive::Tar::Builder builder
+    const char *path
+
+    CODE:
+        RETVAL = b_builder_is_excluded(builder, path);
+
+    OUTPUT:
+        RETVAL
+
+void
+builder_set_handle(builder, fh)
     Archive::Tar::Builder builder
     PerlIO *fh
 
-    ALIAS:
-        Archive::Tar::Builder::start = 1
+    CODE:
+        b_buffer *buf = b_builder_get_buffer(builder);;
+
+        b_buffer_set_fd(buf, PerlIO_fileno(fh));
+
+size_t
+builder_archive_as(builder, ...)
+    Archive::Tar::Builder builder
 
     CODE:
-        size_t i, count;
+        struct builder_options *options = builder->data;
+        b_buffer *buf = b_builder_get_buffer(builder);
 
-        b_error *err = b_error_new();
+        size_t i;
 
-        b_builder_context ctx = {
-            .builder = builder,
-            .fd      = PerlIO_fileno(fh),
-            .path    = NULL,
-            .total   = 0,
-            .err     = err
-        };
+        if ((items - 1) % 2 != 0) {
+            croak("Uneven number of arguments passed; must be in 'path' => 'member_name' format");
+        }
+
+        if (b_buffer_get_fd(buf) == 0) {
+            croak("No file handle set");
+        }
+
+        for (i=1; i<items; i+=2) {
+            int flags = find_flags(options);
+
+            b_string *path        = b_string_new(SvPV_nolen(ST(i)));
+            b_string *member_name = b_string_new(SvPV_nolen(ST(i+1)));
+
+            if (b_find(builder, path, member_name, B_FIND_CALLBACK(b_builder_write_file), flags) < 0) {
+                croak("%s: %s: %s\n", "b_find()", path->str, strerror(errno));
+            }
+        }
+
+        RETVAL = builder->total;
+
+    OUTPUT:
+        RETVAL
+
+size_t
+builder_archive(builder, ...)
+    Archive::Tar::Builder builder
+
+    CODE:
+        struct builder_options *options = builder->data;
+        b_buffer *buf = b_builder_get_buffer(builder);
+
+        size_t i;
+
+        if (items <= 1) {
+            croak("No paths to archive specified");
+        }
+
+        if (b_buffer_get_fd(buf) == 0) {
+            croak("No file handle set");
+        }
+
+        for (i=1; i<items; i++) {
+            int flags = find_flags(options);
+
+            b_string *path = b_string_new(SvPV_nolen(ST(i)));
+
+            if (b_find(builder, path, path, B_FIND_CALLBACK(b_builder_write_file), flags) < 0) {
+                croak("%s: %s: %s\n", "b_find()", path->str, strerror(errno));
+            }
+
+            b_string_free(path);
+        }
+
+        RETVAL = builder->total;
+
+    OUTPUT:
+        RETVAL
+
+ssize_t
+builder_flush(builder)
+    Archive::Tar::Builder builder
+
+    CODE:
+        ssize_t ret;
+
+        b_buffer *buf = b_builder_get_buffer(builder);
+
+        if (b_buffer_get_fd(buf) == 0) {
+            croak("No file handle set");
+        }
+
+        if ((ret = b_buffer_flush(buf)) < 0) {
+            croak("%s: %s", "b_buffer_flush()", strerror(errno));
+        }
+
+        RETVAL = ret;
+
+    OUTPUT:
+        RETVAL
+
+ssize_t
+builder_finish(builder)
+    Archive::Tar::Builder builder
+
+    CODE:
+        ssize_t ret;
+
+        b_buffer *buf = b_builder_get_buffer(builder);
+        b_error *err  = b_builder_get_error(builder);
 
         struct builder_options *options = builder->data;
 
-        if (!options->quiet) {
-            b_error_set_callback(err, builder_warn);
+        if (b_buffer_get_fd(buf) == 0) {
+            croak("No file handle set");
         }
 
-        count = b_stack_count(builder->members);
-
-        for (i=0; i<count; i++) {
-            b_builder_member *member;
-
-            if ((member = b_stack_item_at(builder->members, i)) == NULL) {
-                b_error_destroy(err);
-                croak("%s: %s", "b_stack_item_at()", strerror(errno));
-            }
-
-            ctx.member = member;
-            ctx.path   = member->path;
-
-            if (b_find(member->path, B_FIND_CALLBACK(b_builder_write_file), 0, &ctx) < 0) {
-                b_error_destroy(err);
-                croak("%s: %s: %s", "b_find()", member->path->str, strerror(errno));
-            }
+        if ((ret = b_buffer_flush(buf)) < 0) {
+            croak("%s: %s", "b_buffer_flush()", strerror(errno));
         }
 
-        if (!options->ignore_errors && b_error_status(err) != 0) {
-            b_error_destroy(err);
-            croak("Delayed nonzero exit due to previous errors");
+        if (b_error_status(err) != 0 && !options->ignore_errors) {
+            croak("Delayed nonzero exit status");
         }
 
-        b_error_destroy(err);
+        b_error_reset(err);
 
-        RETVAL = ctx.total;
+        RETVAL = ret;
 
     OUTPUT:
         RETVAL
