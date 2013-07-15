@@ -1,3 +1,8 @@
+Version 1.1
+
+    * Correct suffix length calculation for directories, so directory path
+      is set to archive_as value instead of absolutely path.
+
 Version 1.0
 
     * Implement a large shared buffer; alleviate the need to copy tar file
