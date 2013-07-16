@@ -190,6 +190,11 @@ static struct path_data *path_split(b_string *path, struct stat *st) {
             add_to_prefix = 1;
         }
 
+        /* directory will have a / added to the end */
+        if ( ( (st->st_mode & S_IFMT) == S_IFDIR ) && ( suffix_size + item->len + 1 >= B_HEADER_SUFFIX_SIZE ) ) {
+            add_to_prefix = 1;
+        }
+
         if (add_to_prefix) {
             if (prefix_size) prefix_size++; /* Add 1 to make room for path separator */
             prefix_size += item->len;
