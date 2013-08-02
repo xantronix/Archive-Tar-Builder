@@ -1,3 +1,7 @@
+Version 1.2
+
+    * Correct handling of member names in LongLink blocks.
+
 Version 1.1
 
     * Correct suffix length calculation for directories, so directory path
