@@ -173,7 +173,7 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
             goto error_get_header_block;
         }
 
-        if ((longlink_path = b_string_dup(path)) == NULL) {
+        if ((longlink_path = b_string_dup(member_name)) == NULL) {
             goto error_longlink_path_dup;
         }
 
@@ -191,7 +191,7 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
 
         if ((wrlen = b_file_write_path_blocks(buf, longlink_path)) < 0) {
             if (err) {
-                b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", path);
+                b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", member_name);
             }
 
             goto error_write;
