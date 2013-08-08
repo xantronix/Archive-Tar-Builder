@@ -20,7 +20,7 @@ use Symbol     ();
 
 use Archive::Tar::Builder ();
 
-use Test::More ( 'tests' => 51 );
+use Test::More ( 'tests' => 53 );
 
 sub find_tar {
     my @PATHS    = qw( /bin /usr/bin /usr/local/bin );
@@ -579,4 +579,35 @@ SKIP: {
         }
         else { die "fork: $!" }
     }
+}
+
+# Case 74781: Files with length [100,156] were being included with a trailing
+# slash, causing them to be unpacked as directories in some cases.
+{
+    my $tmp = File::Temp::tempdir( 'CLEANUP' => 1 );
+    mkdir("$tmp/a");
+    mkdir("$tmp/b");
+    my @files = map { "X" x $_ } 1 .. 255;
+
+    foreach my $name (@files) {
+        open( my $fh, ">", "$tmp/a/$name" );
+        print {$fh} $name;
+        close($fh);
+    }
+
+    my $tarfile = "$tmp/file.tar";
+    open( my $atb_wr, ">", $tarfile );
+    my $atb = Archive::Tar::Builder->new;
+    $atb->set_handle($atb_wr);
+    $atb->archive_as( "$tmp/a/$_", $_ ) for @files;
+    $atb->finish;
+    close($atb_wr);
+
+    my $cwd = Cwd::getcwd();
+    chdir("$tmp/b");
+    my $wait = system("tar -xf $tarfile >/dev/null 2>&1");
+    is( $wait, 0, "tar file unarchived successfully" );
+    my $diff_output = `diff -r $tmp/a $tmp/b`;
+    is( $diff_output, "", "no diff output" );
+    chdir($cwd);
 }

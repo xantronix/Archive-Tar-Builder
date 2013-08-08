@@ -1,6 +1,7 @@
 Version 1.2
 
     * Correct handling of member names in LongLink blocks.
+    * Correct handling of filenames between 100 and 156 characters.
 
 Version 1.1
 
