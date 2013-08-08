@@ -186,7 +186,7 @@ static struct path_data *path_split(b_string *path, struct stat *st) {
     }
 
     while ((item = b_stack_pop(parts)) != NULL) {
-        if (suffix_size + item->len >= B_HEADER_SUFFIX_SIZE) {
+        if (suffix_size && suffix_size + item->len >= B_HEADER_SUFFIX_SIZE) {
             add_to_prefix = 1;
         }
 
