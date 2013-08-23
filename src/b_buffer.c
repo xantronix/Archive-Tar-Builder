@@ -72,9 +72,9 @@ static inline size_t padded_size(size_t size) {
     return size + (B_BUFFER_BLOCK_SIZE - (size % B_BUFFER_BLOCK_SIZE));
 }
 
-ssize_t b_buffer_reclaim(b_buffer *buf, size_t used, size_t given) {
+off_t b_buffer_reclaim(b_buffer *buf, size_t used, size_t given) {
     size_t padded_len = padded_size(used);
-    ssize_t amount;
+    off_t amount;
 
     if (buf == NULL || given == 0 || given % B_BUFFER_BLOCK_SIZE) {
         errno = EINVAL;
