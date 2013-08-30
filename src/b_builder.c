@@ -99,7 +99,7 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
 
     int file_fd = 0;
 
-    ssize_t wrlen = 0;
+    off_t wrlen = 0;
 
     b_header *header;
     b_header_block *block;

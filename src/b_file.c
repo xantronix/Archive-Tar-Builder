@@ -17,9 +17,10 @@
  * this method will write out as many 512-byte blocks as necessary to contain the
  * full path.
  */
-ssize_t b_file_write_path_blocks(b_buffer *buf, b_string *path) {
+off_t b_file_write_path_blocks(b_buffer *buf, b_string *path) {
     size_t i, len;
-    ssize_t blocklen = 0, total = 0;
+    ssize_t blocklen = 0;
+    off_t total = 0;
 
     len = b_string_len(path);
 
@@ -44,8 +45,9 @@ error_io:
     return -1;
 }
 
-ssize_t b_file_write_contents(b_buffer *buf, int file_fd) {
-    ssize_t rlen = 0, blocklen = 0, total = 0;
+off_t b_file_write_contents(b_buffer *buf, int file_fd) {
+    ssize_t rlen = 0, blocklen = 0;
+    off_t total = 0;
 
     do {
         unsigned char *block;
