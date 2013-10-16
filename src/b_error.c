@@ -35,7 +35,10 @@ void b_error_set(b_error *err, enum b_error_type type, int _errno, char *message
 
     err->type   = type;
     err->_errno = _errno;
-    err->status = -1;
+
+    if ( type == B_ERROR_FATAL ) {
+        err->status = -1;
+    }
 
     b_string_free(err->message);
     b_string_free(err->path);
