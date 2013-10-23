@@ -90,10 +90,10 @@ b_header_block *b_header_encode_block(b_header_block *block, b_header *header) {
     snprintf(block->uid,  B_HEADER_UID_SIZE,  B_HEADER_UID_FORMAT,  header->uid);
     snprintf(block->gid,  B_HEADER_GID_SIZE,  B_HEADER_GID_FORMAT,  header->gid);
 
-    if (header->size > B_HEADER_MAX_FILE_SIZE) {
+    if (header->size >= B_HEADER_MAX_FILE_SIZE) {
         encode_base256_value(block->size, B_HEADER_SIZE_SIZE, header->size);
     } else {
-        snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_SIZE_FORMAT, header->size);
+        snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_LONG_SIZE_FORMAT, header->size);
     }
 
     snprintf(block->mtime, B_HEADER_MTIME_SIZE, B_HEADER_MTIME_FORMAT, header->mtime);
@@ -131,7 +131,7 @@ b_header_block *b_header_encode_block(b_header_block *block, b_header *header) {
 b_header_block *b_header_encode_longlink_block(b_header_block *block, b_string *path) {
     memcpy(  block->magic,  B_HEADER_MAGIC,       B_HEADER_MAGIC_SIZE);
     snprintf(block->suffix, B_HEADER_SUFFIX_SIZE, B_HEADER_LONGLINK_PATH);
-    snprintf(block->size,   B_HEADER_SIZE_SIZE,   B_HEADER_SIZE_FORMAT,   b_string_len(path));
+    snprintf(block->size,   B_HEADER_SIZE_SIZE,   B_HEADER_INT_SIZE_FORMAT,   b_string_len(path));
 
     block->linktype = B_HEADER_LONGLINK_TYPE;
 
