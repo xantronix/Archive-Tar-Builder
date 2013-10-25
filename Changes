@@ -1,3 +1,6 @@
+Version 1.5
+    * Correct handling of files between 4 GiB & 8 GiB, inclusive.
+
 Version 1.4
     * Do not croak() on a warning
 
