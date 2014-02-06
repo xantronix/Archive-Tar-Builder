@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright (c) 2012, cPanel, Inc.
+# Copyright (c) 2014, cPanel, Inc.
 # All rights reserved.
 # http://cpanel.net/
 #
@@ -20,7 +20,7 @@ use Symbol     ();
 
 use Archive::Tar::Builder ();
 
-use Test::More ( 'tests' => 53 );
+use Test::More tests => 56;
 
 sub find_tar {
     my @PATHS    = qw( /bin /usr/bin /usr/local/bin );
@@ -548,7 +548,7 @@ SKIP: {
 
     ## mechanics of the test...
     sub go_74517 {
-        $SIG{CHLD} = sub { waitpid -1, 0 };
+        local $SIG{CHLD} = sub { waitpid -1, 0 };
         pipe my ($atb_rd), my ($atb_wr);
         pipe my ($tar_rd), my ($tar_wr);
         if ( my $child = fork ) {
@@ -610,4 +610,105 @@ SKIP: {
     my $diff_output = `diff -r $tmp/a $tmp/b`;
     is( $diff_output, "", "no diff output" );
     chdir($cwd);
+}
+
+# Some of the tests below are meant to trigger a race condition and are timing-sensitive.
+use constant { NORMAL => 0, APPENDING => 1, TRUNCATED => 2 };
+for my $test_mode (
+    NORMAL,    # File is completely written before being archived.
+               # Expectation: No problems.
+
+    APPENDING, # File is still being appended to as it is archived.
+               # Expectation: Archived copy will be truncated to match the original length.
+
+    TRUNCATED, # File is written before being archived but then is truncated as it is being archived.
+               # Expectation: Archive::Tar::Builder will die, rather than silently produce a corrupt tarball.
+  ) {
+    my $tmp = File::Temp::tempdir( 'CLEANUP' => 1 );
+
+    my ( $child, $child2 );
+    if ( $child = fork ) {
+    }
+    elsif ( defined $child ) {
+        open( my $fh, ">", "$tmp/example.txt" );
+        for ( 1 .. ( $test_mode != APPENDING ? 10 : 1_000 ) ) {
+            print {$fh} ( "hello" x 50 ) . "\n";
+            select undef, undef, undef, 0.01;
+        }
+        close $fh;
+        exit;
+    }
+    else { die "fork: $!" }
+
+    waitpid $child, 0 if $test_mode != APPENDING;
+
+    select undef, undef, undef, 0.1;
+
+    if ( $test_mode == TRUNCATED ) {
+        if ( $child2 = fork ) {
+        }
+        elsif ( defined $child2 ) {
+            open( my $fh, "+<", "$tmp/example.txt" );
+            for ( my $len = 100_000_000; $len >= 0; $len -= 10_000 ) {
+                truncate $fh, $len;
+                select undef, undef, undef, 0.05;
+            }
+            close $fh;
+            exit;
+        }
+        else { die "fork: $!" }
+    }
+
+    my $tarfile = "$tmp/file2.tar";
+
+    open( my $atb_wr, ">", $tarfile );
+
+    my $ok = eval {
+        my $atb = Archive::Tar::Builder->new;
+        $atb->set_handle($atb_wr);
+        $atb->archive("$tmp/example.txt");
+        $atb->finish;
+        1;
+    };
+    my $atb_error = $@;
+
+    close($atb_wr);
+
+    my $output = `tar -xvf $tarfile -C $tmp 2>&1`;
+    my $status = $?;
+
+    if ( $test_mode == TRUNCATED ) {
+
+        my $atb_died = ( !$ok && $atb_error );
+        my $extract_succeeded = ( $status == 0 && $output =~ /example\.txt/ );
+
+        # The "truncated" test is satisfied if either:
+        #     1. Archive::Tar::Builder died while creating the archive.
+        # or  2. A usable archive was created which includes the file in question.
+        ok $atb_died || $extract_succeeded, "If a file is truncated while it is being read, ATB will die. Otherwise, the resulting archive will be usable." and diag "In this case, the previous test passed because "
+          . (
+            $atb_died
+            ? "Archive::Tar::Builder died, which was the goal of the test"
+            : "extract succeeded, which means the test failed to trigger the race condition, but that's OK"
+          );
+    }
+    else {
+        is $status, 0,
+          sprintf(
+            "for an archive created while a file being archived was %s, archive was extracted successfully",
+            $test_mode == NORMAL      ? "completely written"
+            : $test_mode == APPENDING ? "appended to as it was being archived"
+            : die
+          ) or diag explain [ $output, `ls -al $tmp` ];
+        kill 9, $child2 if $test_mode == TRUNCATED;    # the child in this mode would go on far longer than needed
+    }
+
+    if ($child) {
+        kill 9, $child;
+        waitpid $child, 0;
+    }
+    if ($child2) {
+        kill 9, $child2;
+        waitpid $child2, 0;
+    }
 }

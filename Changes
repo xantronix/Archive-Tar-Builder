@@ -1,19 +1,24 @@
 Version 1.6
+
     * Avoid stat() calls on files excluded from archive
 
 Version 1.5
-    * Correct handling of files between 4 GiB & 8 GiB, inclusive.
+
+    * Correct handling of files between 4 GiB & 8 GiB, inclusive
 
 Version 1.4
+
     * Do not croak() on a warning
 
 Version 1.3
-    * Remove 2 GB file limit.
+
+    * Remove 2 GB file limit
 
 Version 1.2
 
-    * Correct handling of member names in LongLink blocks.
-    * Correct handling of filenames between 100 and 156 characters.
+    * Correct handling of member names in LongLink blocks
+
+    * Correct handling of filenames between 100 and 156 characters
 
 Version 1.1
 
@@ -94,18 +99,20 @@ Version 0.6
 Version 0.5
 
     * Feature-for-feature reimplementation in C with a small XS layer
+
     * Remove option of "GNU extensions"; GNU extensions are now always available
       and use is implied
+
     * Slightly better adherence to POSIX ustar header format, such as with ustar
       header magic
 
 Version 0.4
 
-    Resolve an issue of build-time modules in mk/ being picked up by
-    CPAN's indexer, resulting in an "UNAUTHORIZED RELEASE" warning, by declaring
-    the PMLIBDIRS value in Makefile.PL to include only 'lib', and using a trick
-    (thanks RURBAN!) to cause the PAUSE indexer to not pick up the package
-    declarations in the files in mk/
+    * Resolve an issue of build-time modules in mk/ being picked up by
+      CPAN's indexer, resulting in an "UNAUTHORIZED RELEASE" warning, by
+      declaring the PMLIBDIRS value in Makefile.PL to include only 'lib', and
+      using a trick (thanks RURBAN!) to cause the PAUSE indexer to not pick up
+      the package declarations in the files in mk/
 
 Version 0.3
 

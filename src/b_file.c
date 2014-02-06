@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include "b_builder.h"
 #include "b_header.h"
@@ -45,9 +46,9 @@ error_io:
     return -1;
 }
 
-off_t b_file_write_contents(b_buffer *buf, int file_fd) {
+off_t b_file_write_contents(b_buffer *buf, int file_fd, off_t file_size) {
     ssize_t rlen = 0, blocklen = 0;
-    off_t total = 0;
+    off_t total = 0, real_total = 0, max_read = 0;
 
     do {
         unsigned char *block;
@@ -62,11 +63,15 @@ off_t b_file_write_contents(b_buffer *buf, int file_fd) {
             goto error_io;
         }
 
-        if ((rlen = read(file_fd, block, blocklen)) < 0) {
+        max_read = file_size - real_total;
+        if (max_read > blocklen) max_read = blocklen;
+
+        if ((rlen = read(file_fd, block, max_read)) < max_read) {
             goto error_io;
         }
 
-        total += blocklen;
+        total      += blocklen;
+        real_total += rlen;
 
         /*
          * Reclaim any amount of bytes from the buffer that weren't used to

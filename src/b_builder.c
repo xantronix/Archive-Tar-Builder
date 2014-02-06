@@ -208,7 +208,7 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
      * Finally, end by writing the file contents.
      */
     if (file_fd) {
-        if ((wrlen = b_file_write_contents(buf, file_fd)) < 0) {
+        if ((wrlen = b_file_write_contents(buf, file_fd, header->size)) < 0) {
             if (err) {
                 b_error_set(err, B_ERROR_WARN, errno, "Cannot write file to archive", path);
             }
