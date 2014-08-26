@@ -68,9 +68,8 @@ static void b_dir_destroy(b_dir *item) {
 }
 
 typedef struct {
-    struct stat * st;
-    b_string *    path;
-    b_string *    name;
+    b_string * path;
+    b_string * name;
 } b_dir_item;
 
 static b_dir_item *b_dir_read(b_dir *dir, int flags) {
@@ -87,10 +86,6 @@ static b_dir_item *b_dir_read(b_dir *dir, int flags) {
 
     if ((item = malloc(sizeof(*item))) == NULL) {
         goto error_malloc;
-    }
-
-    if ((item->st = malloc(sizeof(*item->st))) == NULL) {
-        goto error_malloc_st;
     }
 
     if ((item->path = b_string_dup(dir->path)) == NULL) {
@@ -114,13 +109,8 @@ static b_dir_item *b_dir_read(b_dir *dir, int flags) {
         goto error_string_append;
     }
 
-    if (b_stat(item->path, item->st, flags) < 0) {
-        goto error_stat;
-    }
-
     return item;
 
-error_stat:
 error_string_append:
     b_string_free(item->name);
 
@@ -128,9 +118,6 @@ error_string_new:
     b_string_free(item->path);
 
 error_string_dup:
-    free(item->st);
-
-error_malloc_st:
     free(item);
 
 error_malloc:
@@ -146,9 +133,6 @@ static void b_dir_item_free(b_dir_item *item) {
 
     b_string_free(item->path);
     item->path = NULL;
-
-    free(item->st);
-    item->st = NULL;
 
     free(item);
 }
@@ -186,7 +170,7 @@ error_string_dup:
 int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_callback callback, int flags) {
     b_stack *dirs;
     b_dir *dir;
-    struct stat st;
+    struct stat st, item_st;
     int res;
 
     b_error *err = b_builder_get_error(builder);
@@ -265,12 +249,25 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
         }
 
         /*
+         * Only test to see if the current member is excluded if any exclusions or
+         * inclusions were actually specified, to save time calling the exclusion
+         * engine.
+         */
+        if (builder->match != NULL && lafe_excluded(builder->match, (const char *)item->path->str)) {
+            goto cleanup_item;
+        }
+
+        if (b_stat(item->path, &item_st, flags) < 0) {
+            goto error_item;
+        }
+
+        /*
          * Attempt to obtain and use a substituted member name based on the
          * real path, and use it, if possible.
          */
         new_member_name = subst_member_name(clean_path, clean_member_name, item->path);
 
-        res = callback(builder, item->path, new_member_name? new_member_name: item->path, item->st);
+        res = callback(builder, item->path, new_member_name? new_member_name: item->path, &item_st);
 
         b_string_free(new_member_name);
 
@@ -284,7 +281,7 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
             }
         }
 
-        if ((item->st->st_mode & S_IFMT) == S_IFDIR) {
+        if ((item_st.st_mode & S_IFMT) == S_IFDIR) {
             b_dir *newdir;
 
             if ((newdir = b_dir_open(item->path)) == NULL) {

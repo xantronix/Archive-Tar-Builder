@@ -113,15 +113,6 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
         b_error_clear(err);
     }
 
-    /*
-     * Only test to see if the current member is excluded if any exclusions or
-     * inclusions were actually specified, to save time calling the exclusion
-     * engine.
-     */
-    if (builder->match != NULL && lafe_excluded(builder->match, (const char *)path->str)) {
-        return 0;
-    }
-
     if ((st->st_mode & S_IFMT) == S_IFREG) {
         if ((file_fd = open(path->str, O_RDONLY)) < 0) {
             if (err) {

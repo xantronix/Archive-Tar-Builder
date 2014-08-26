@@ -1,3 +1,6 @@
+Version 1.6
+    * Avoid stat() calls on files excluded from archive
+
 Version 1.5
     * Correct handling of files between 4 GiB & 8 GiB, inclusive.
 

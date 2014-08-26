@@ -1,6 +1,6 @@
 package Archive::Tar::Builder;
 
-# Copyright (c) 2012, cPanel, Inc.
+# Copyright (c) 2014, cPanel, Inc.
 # All rights reserved.
 # http://cpanel.net/
 #
@@ -19,7 +19,7 @@ BEGIN {
     use vars qw(@ISA $VERSION);
 
     our @ISA     = qw(Exporter);
-    our $VERSION = '1.5';
+    our $VERSION = '1.6';
 }
 
 XSLoader::load( 'Archive::Tar::Builder', $VERSION );
