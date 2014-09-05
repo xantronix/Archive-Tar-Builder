@@ -16,7 +16,7 @@ use Test::Exception;
 use autodie;
 
 use Fcntl qw(O_WRONLY O_CREAT O_APPEND O_LARGEFILE SEEK_CUR);
-use IPC::Open3;
+use IPC::Open3 ();
 
 use lib "lib";
 use Archive::Tar::Builder ();
@@ -28,23 +28,29 @@ my @file_sizes = (
     8.5 * 2**30,    # 8.5 GiB
 );
 
+my $file_created = 0;
+
+#
 # This is a good test to run, but it has the potential to be disruptive, so
-# only run it internally or if someone explicitly requests it.
-if ( $ENV{TEST_BIGFILE} || `hostname` =~ /cpanel/ ) {
+# only run it if someone explicitly requests it
+#
+if ( $ENV{TEST_BIGFILE} ) {
     plan tests => 3 * @file_sizes;
 }
 else {
     plan skip_all => "Big-file tests disabled unless TEST_BIGFILE environment variable is set.";
+    exit 0;
 }
 
 my $file_name = 'large_file';
 
 # Cleanup code
-END { unlink $file_name }
+END { unlink $file_name if $file_created }
 $SIG{INT} = sub { exit };
 
 foreach my $size (@file_sizes) {
     create_file( $file_name, $size );
+    $file_created = 1;
     test_large_file( $file_name, $size );
 }
 

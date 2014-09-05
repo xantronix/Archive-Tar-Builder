@@ -26,7 +26,7 @@ b_error *  b_error_new();
 void       b_error_set_callback(b_error *err, b_error_callback callback);
 void       b_error_set(b_error *err, enum b_error_type type, int _errno, char *message, b_string *path);
 void       b_error_clear(b_error *err);
-void       b_error_warn(b_error *err);
+int        b_error_warn(b_error *err);
 int        b_error_fatal(b_error *err);
 int        b_error_status(b_error *err);
 int        b_error_errno(b_error *err);

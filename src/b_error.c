@@ -76,13 +76,10 @@ void b_error_clear(b_error *err) {
     err->path = NULL;
 }
 
-void b_error_warn(b_error *err) {
-    if (err == NULL)          return;
-    if (err->_errno == 0)     return;
-    if (err->message == NULL) return;
-    if (err->path == NULL)    return;
+int b_error_warn(b_error *err) {
+    if (err == NULL) return 0;
 
-    fprintf(stderr, "%s: %s: %s\n", err->path->str, err->message->str, strerror(err->_errno));
+    return err->type == B_ERROR_WARN;
 }
 
 int b_error_fatal(b_error *err) {
