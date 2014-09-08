@@ -357,7 +357,7 @@ builder_finish(builder)
             croak("%s: %s", "b_buffer_flush()", strerror(errno));
         }
 
-        if (b_error_status(err) != 0 && !options->ignore_errors) {
+        if (b_error_warn(err) && !options->ignore_errors) {
             croak("Delayed nonzero exit status");
         }
 

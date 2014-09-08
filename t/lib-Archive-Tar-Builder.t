@@ -530,7 +530,7 @@ SKIP: {
 
     # The specific failure was seen at length 156 and up, but why not test a lot more than that for the heck of it?
     my @test_range = 1 .. 5_000;
-    my @t_in = map { [ '/etc/fstab', ( "X" x $_ ) ] } @test_range;
+    my @t_in = map { [ '/etc/hosts', ( "X" x $_ ) ] } @test_range;
     my %t_out;
     my @expect_t_out = map { "X" x $_ } @test_range;
 
