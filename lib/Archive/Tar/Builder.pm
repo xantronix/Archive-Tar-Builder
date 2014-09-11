@@ -181,6 +181,16 @@ C<ignore_errors> is not enabled.  Finally, reset any other error data present.
 
 Written by Xan Tronix <xan@cpan.org>
 
+=head1 CONTRIBUTORS
+
+=over
+
+=item Rikus Goodell <rikus.goodell@cpanel.net>
+
+=item Brian Carlson <brian.carlson@cpanel.net>
+
+=back
+
 =head1 COPYRIGHT
 
 Copyright (c) 2014, cPanel, Inc.

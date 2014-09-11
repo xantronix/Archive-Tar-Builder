@@ -125,6 +125,11 @@ take lower precedence to [exclusions](https://metacpan.org/pod/FILE&#x20;PATH&#x
 
 Written by Xan Tronix <xan@cpan.org>
 
+# CONTRIBUTORS
+
+- Rikus Goodell <rikus.goodell@cpanel.net>
+- Brian Carlson <brian.carlson@cpanel.net>
+
 # COPYRIGHT
 
 Copyright (c) 2014, cPanel, Inc.
