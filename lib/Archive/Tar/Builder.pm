@@ -10,17 +10,11 @@ package Archive::Tar::Builder;
 use strict;
 use warnings;
 
-use Exporter ();
 use XSLoader ();
 
 use Archive::Tar::Builder::UserCache ();
 
-BEGIN {
-    use vars qw(@ISA $VERSION);
-
-    our @ISA     = qw(Exporter);
-    our $VERSION = '1.6';
-}
+our $VERSION = '1.6';
 
 XSLoader::load( 'Archive::Tar::Builder', $VERSION );
 
