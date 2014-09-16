@@ -18,6 +18,14 @@ our $VERSION = '1.6';
 
 XSLoader::load( 'Archive::Tar::Builder', $VERSION );
 
+sub archive {
+    my ( $self, @members ) = @_;
+
+    die('No paths to archive specified') unless @members;
+
+    return $self->archive_as( map { $_ => $_ } @members );
+}
+
 __END__
 
 =head1 NAME
@@ -61,6 +69,11 @@ cause Archive::Tar::Builder to die() at the end of the stream.
 =item C<follow_symlinks>
 
 When set, symlinks encountered while archiving are followed.
+
+=item C<gnu_extensions>
+
+When set, support for arbitrarily long pathnames is enabled using the GNU
+LongLink format.
 
 =back
 

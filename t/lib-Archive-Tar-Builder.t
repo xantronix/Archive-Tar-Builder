@@ -20,7 +20,8 @@ use Symbol     ();
 
 use Archive::Tar::Builder ();
 
-use Test::More tests => 56;
+use Test::More tests => 58;
+use Test::Exception;
 
 sub find_tar {
     my @PATHS    = qw( /bin /usr/bin /usr/local/bin );
@@ -435,7 +436,7 @@ SKIP: {
 
     symlink( 'foo', "$tmpdir/bar" ) or die("Unable to symlink() $tmpdir/bar to foo: $!");
 
-    my $archive = Archive::Tar::Builder->new;
+    my $archive = Archive::Tar::Builder->new( 'gnu_extensions' => 1 );
 
     my $err = Symbol::gensym();
 
@@ -568,13 +569,18 @@ SKIP: {
             else { die "fork: $!" }
         }
         elsif ( defined $child ) {
-            my $atb = Archive::Tar::Builder->new;
+            my $atb = Archive::Tar::Builder->new( 'gnu_extensions' => 1 );
+
             $atb->set_handle($atb_wr);
+
             for (@t_in) {
                 $atb->archive_as(@$_);
             }
+
             $atb->finish;
+
             close($atb_wr);
+
             exit;
         }
         else { die "fork: $!" }
@@ -597,7 +603,9 @@ SKIP: {
 
     my $tarfile = "$tmp/file.tar";
     open( my $atb_wr, ">", $tarfile );
-    my $atb = Archive::Tar::Builder->new;
+
+    my $atb = Archive::Tar::Builder->new( 'gnu_extensions' => 1 );
+
     $atb->set_handle($atb_wr);
     $atb->archive_as( "$tmp/a/$_", $_ ) for @files;
     $atb->finish;
@@ -664,12 +672,18 @@ for my $test_mode (
     open( my $atb_wr, ">", $tarfile );
 
     my $ok = eval {
-        my $atb = Archive::Tar::Builder->new;
+        my $atb = Archive::Tar::Builder->new(
+            'gnu_extensions' => 1,
+            'quiet'          => 1
+        );
+
         $atb->set_handle($atb_wr);
         $atb->archive("$tmp/example.txt");
         $atb->finish;
+
         1;
     };
+
     my $atb_error = $@;
 
     close($atb_wr);
@@ -679,13 +693,14 @@ for my $test_mode (
 
     if ( $test_mode == TRUNCATED ) {
 
-        my $atb_died = ( !$ok && $atb_error );
+        my $atb_died          = ( !$ok         && $atb_error );
         my $extract_succeeded = ( $status == 0 && $output =~ /example\.txt/ );
 
         # The "truncated" test is satisfied if either:
         #     1. Archive::Tar::Builder died while creating the archive.
         # or  2. A usable archive was created which includes the file in question.
-        ok $atb_died || $extract_succeeded, "If a file is truncated while it is being read, ATB will die. Otherwise, the resulting archive will be usable." and diag "In this case, the previous test passed because "
+        ok $atb_died || $extract_succeeded,
+          "If a file is truncated while it is being read, ATB will die. Otherwise, the resulting archive will be usable." and diag "In this case, the previous test passed because "
           . (
             $atb_died
             ? "Archive::Tar::Builder died, which was the goal of the test"
@@ -698,7 +713,7 @@ for my $test_mode (
             "for an archive created while a file being archived was %s, archive was extracted successfully",
             $test_mode == NORMAL      ? "completely written"
             : $test_mode == APPENDING ? "appended to as it was being archived"
-            : die
+            :                           die
           ) or diag explain [ $output, `ls -al $tmp` ];
         kill 9, $child2 if $test_mode == TRUNCATED;    # the child in this mode would go on far longer than needed
     }
@@ -711,4 +726,39 @@ for my $test_mode (
         kill 9, $child2;
         waitpid $child2, 0;
     }
+}
+
+#
+# Case 117233: Ensure Archive::Tar::Builder->archive() and archive_as() require
+# 'gnu_extensions' for archiving files with impossibly long names.
+#
+{
+    open my $fh, '>', '/dev/null' or die("Unable to open /dev/null for writing: $!");
+
+    {
+        my $builder = Archive::Tar::Builder->new( 'quiet' => 1 );
+
+        $builder->set_handle($fh);
+
+        throws_ok {
+            $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
+        }
+        qr/File name too long/, '$builder->archive_as() croak()s on long filenames without gnu_extensions';
+    }
+
+    {
+        my $builder = Archive::Tar::Builder->new(
+            'quiet'          => 1,
+            'gnu_extensions' => 1
+        );
+
+        $builder->set_handle($fh);
+
+        lives_ok {
+            $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
+        }
+        '$builder->archive_as() will NOT croak() on long filenames when gnu_extensions is passed';
+    }
+
+    close $fh;
 }

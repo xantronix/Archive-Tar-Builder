@@ -36,6 +36,11 @@ under an arbitrary name.
 
         When set, symlinks encountered while archiving are followed.
 
+    - `gnu_extensions`
+
+        When set, support for arbitrarily long pathnames is enabled using the GNU
+        LongLink format.
+
 # FILE PATH MATCHING
 
 File path matching facilities exist to control, based on filenames and patterns,
