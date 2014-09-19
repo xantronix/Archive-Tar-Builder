@@ -67,6 +67,8 @@ off_t b_file_write_contents(b_buffer *buf, int file_fd, off_t file_size) {
         if (max_read > blocklen) max_read = blocklen;
 
         if ((rlen = read(file_fd, block, max_read)) < max_read) {
+            errno = EINVAL;
+
             goto error_io;
         }
 
@@ -83,6 +85,8 @@ off_t b_file_write_contents(b_buffer *buf, int file_fd, off_t file_size) {
     } while (rlen > 0);
 
     if (rlen < 0) {
+        errno = EINVAL;
+
         goto error_io;
     }
 

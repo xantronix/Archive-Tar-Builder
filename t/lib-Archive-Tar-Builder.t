@@ -20,7 +20,8 @@ use Symbol     ();
 
 use Archive::Tar::Builder ();
 
-use Test::More tests => 56;
+use Test::More tests => 58;
+use Test::Exception;
 
 sub find_tar {
     my @PATH     = qw( /usr/local/bin /usr/bin /bin );
@@ -457,7 +458,7 @@ SKIP: {
 
     symlink( 'foo', "$tmpdir/bar" ) or die("Unable to symlink() $tmpdir/bar to foo: $!");
 
-    my $archive = Archive::Tar::Builder->new;
+    my $archive = Archive::Tar::Builder->new( 'gnu_extensions' => 1 );
 
     my $err = Symbol::gensym();
 
@@ -605,13 +606,18 @@ SKIP: {
             else { die "fork: $!" }
         }
         elsif ( defined $child ) {
-            my $atb = Archive::Tar::Builder->new;
+            my $atb = Archive::Tar::Builder->new( 'gnu_extensions' => 1 );
+
             $atb->set_handle($atb_wr);
+
             for (@t_in) {
                 $atb->archive_as(@$_);
             }
+
             $atb->finish;
+
             close($atb_wr);
+
             exit;
         }
         else { die "fork: $!" }
@@ -636,7 +642,9 @@ SKIP: {
 
     my $tarfile = "$tmp/file.tar";
     open( my $atb_wr, ">", $tarfile );
-    my $atb = Archive::Tar::Builder->new;
+
+    my $atb = Archive::Tar::Builder->new( 'gnu_extensions' => 1 );
+
     $atb->set_handle($atb_wr);
     $atb->archive_as( "$tmp/a/$_", $_ ) for @files;
     $atb->finish;
@@ -703,12 +711,18 @@ for my $test_mode (
     open( my $atb_wr, ">", $tarfile );
 
     my $ok = eval {
-        my $atb = Archive::Tar::Builder->new;
+        my $atb = Archive::Tar::Builder->new(
+            'gnu_extensions' => 1,
+            'quiet'          => 1
+        );
+
         $atb->set_handle($atb_wr);
         $atb->archive("$tmp/example.txt");
         $atb->finish;
+
         1;
     };
+
     my $atb_error = $@;
 
     close($atb_wr);
@@ -751,4 +765,39 @@ for my $test_mode (
         kill 9, $child2;
         waitpid $child2, 0;
     }
+}
+
+#
+# Case 117233: Ensure Archive::Tar::Builder->archive() and archive_as() require
+# 'gnu_extensions' for archiving files with impossibly long names.
+#
+{
+    open my $fh, '>', '/dev/null' or die("Unable to open /dev/null for writing: $!");
+
+    {
+        my $builder = Archive::Tar::Builder->new( 'quiet' => 1 );
+
+        $builder->set_handle($fh);
+
+        throws_ok {
+            $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
+        }
+        qr/File name too long/, '$builder->archive_as() croak()s on long filenames without gnu_extensions';
+    }
+
+    {
+        my $builder = Archive::Tar::Builder->new(
+            'quiet'          => 1,
+            'gnu_extensions' => 1
+        );
+
+        $builder->set_handle($fh);
+
+        lives_ok {
+            $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
+        }
+        '$builder->archive_as() will NOT croak() on long filenames when gnu_extensions is passed';
+    }
+
+    close $fh;
 }

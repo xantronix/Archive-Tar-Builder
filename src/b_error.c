@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "b_string.h"
@@ -54,6 +53,8 @@ void b_error_set(b_error *err, enum b_error_type type, int _errno, char *message
     if (err->callback) {
         err->callback(err);
     }
+
+    return;
 
 error_string_dup_path:
     b_string_free(err->message);

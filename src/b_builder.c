@@ -30,6 +30,7 @@ b_builder *b_builder_new(size_t block_factor) {
 
     builder->total          = 0;
     builder->match          = NULL;
+    builder->options        = B_BUILDER_NONE;
     builder->lookup_service = NULL;
     builder->lookup_ctx     = NULL;
     builder->data           = NULL;
@@ -44,6 +45,16 @@ error_buffer_new:
 
 error_malloc:
     return NULL;
+}
+
+enum b_builder_options b_builder_get_options(b_builder *builder) {
+    if (builder == NULL) return B_BUILDER_NONE;
+
+    return builder->options;
+}
+
+void b_builder_set_options(b_builder *builder, enum b_builder_options options) {
+    builder->options = options;
 }
 
 b_error *b_builder_get_error(b_builder *builder) {
@@ -160,6 +171,20 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
     if (header->truncated) {
         b_string *longlink_path;
 
+        /*
+         * GNU extensions must be explicitly enabled to encode GNU LongLink
+         * headers.
+         */
+        if (!(builder->options & B_BUILDER_GNU_EXTENSIONS)) {
+            if (err) {
+                errno = ENAMETOOLONG;
+
+                b_error_set(err, B_ERROR_WARN, errno, "File name too long", member_name);
+            }
+
+            goto error_path_toolong;
+        }
+
         if ((block = b_buffer_get_block(buf, B_HEADER_SIZE, &wrlen)) == NULL) {
             goto error_get_header_block;
         }
@@ -231,6 +256,7 @@ error_write:
 error_longlink_path_append:
 error_longlink_path_dup:
 error_get_header_block:
+error_path_toolong:
 error_header_encode:
 error_lookup:
     b_header_destroy(header);
@@ -257,8 +283,9 @@ void b_builder_destroy(b_builder *builder) {
         builder->err = NULL;
     }
 
-    builder->total = 0;
-    builder->data  = NULL;
+    builder->options = B_BUILDER_NONE;
+    builder->total   = 0;
+    builder->data    = NULL;
 
     lafe_cleanup_exclusions(&builder->match);
 

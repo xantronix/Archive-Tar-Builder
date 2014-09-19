@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, cPanel, Inc.
+ * Copyright (c) 2014, cPanel, Inc.
  * All rights reserved.
  * http://cpanel.net/
  *
@@ -21,13 +21,6 @@
 #include "b_builder.h"
 
 typedef b_builder * Archive__Tar__Builder;
-
-struct builder_options {
-    int    quiet;
-    int    ignore_errors;
-    int    follow_symlinks;
-    size_t block_factor;
-};
 
 static int builder_lookup(SV *cache, uid_t uid, gid_t gid, b_string **user, b_string **group) {
     dSP;
@@ -100,12 +93,12 @@ static void builder_warn(b_error *err) {
     warn("%s: %s: %s", b_error_path(err)->str, b_error_message(err)->str, strerror(b_error_errno(err)));
 }
 
-static int find_flags(struct builder_options *options) {
+static int find_flags(enum b_builder_options options) {
     int flags = 0;
 
-    if (options == NULL) return 0;
-
-    if (options->follow_symlinks) flags |= B_FIND_FOLLOW_SYMLINKS;
+    if (options & B_BUILDER_FOLLOW_SYMLINKS) {
+        flags |= B_FIND_FOLLOW_SYMLINKS;
+    }
 
     return flags;
 }
@@ -121,38 +114,33 @@ builder_new(klass, ...)
         b_error *err;
         SV *cache = NULL;
         I32 i, retc;
-        struct builder_options *options;
+        enum b_builder_options options = B_BUILDER_NONE;
+        size_t block_factor = B_BUFFER_DEFAULT_FACTOR;
 
         if ((items - 1) % 2 != 0) {
             croak("Uneven number of arguments passed; must be in 'key' => 'value' format");
         }
 
-        if ((options = malloc(sizeof(*options))) == NULL) {
-            croak("%s: %s", "malloc()", strerror(errno));
-        }
-
-        options->quiet           = 0;
-        options->ignore_errors   = 0;
-        options->block_factor    = 0;
-        options->follow_symlinks = 0;
-
         for (i=1; i<items; i+=2) {
             char *key = SvPV_nolen(ST(i));
             SV *value = ST(i+1);
 
-            if (strcmp(key, "quiet")           == 0 && SvIV(value)) options->quiet           = 1;
-            if (strcmp(key, "ignore_errors")   == 0 && SvIV(value)) options->ignore_errors   = 1;
-            if (strcmp(key, "block_factor")    == 0 && SvIV(value)) options->block_factor    = SvIV(value);
-            if (strcmp(key, "follow_symlinks") == 0 && SvIV(value)) options->follow_symlinks = 1;
+            if (strcmp(key, "quiet")           == 0 && SvIV(value)) options |= B_BUILDER_QUIET;
+            if (strcmp(key, "ignore_errors")   == 0 && SvIV(value)) options |= B_BUILDER_IGNORE_ERRORS;
+            if (strcmp(key, "follow_symlinks") == 0 && SvIV(value)) options |= B_BUILDER_FOLLOW_SYMLINKS;
+            if (strcmp(key, "gnu_extensions")  == 0 && SvIV(value)) options |= B_BUILDER_GNU_EXTENSIONS;
+            if (strcmp(key, "block_factor")    == 0 && SvIV(value)) block_factor = SvIV(value);
         }
 
-        if ((builder = b_builder_new(options->block_factor)) == NULL) {
+        if ((builder = b_builder_new(block_factor)) == NULL) {
             croak("%s: %s", "b_builder_new()", strerror(errno));
         }
 
+        b_builder_set_options(builder, options);
+
         err = b_builder_get_error(builder);
 
-        if (!options->quiet) {
+        if (!(options & B_BUILDER_QUIET)) {
             b_error_set_callback(err, B_ERROR_CALLBACK(builder_warn));
         }
 
@@ -171,7 +159,6 @@ builder_new(klass, ...)
         PUTBACK;
 
         b_builder_set_lookup_service(builder, B_LOOKUP_SERVICE(builder_lookup), cache); 
-        b_builder_set_data(builder, options);
 
         RETVAL = builder;
 
@@ -251,7 +238,7 @@ builder_archive_as(builder, ...)
     Archive::Tar::Builder builder
 
     CODE:
-        struct builder_options *options = builder->data;
+        enum b_builder_options options = b_builder_get_options(builder);
         b_buffer *buf = b_builder_get_buffer(builder);
 
         size_t i;
@@ -271,43 +258,15 @@ builder_archive_as(builder, ...)
             b_string *member_name = b_string_new(SvPV_nolen(ST(i+1)));
 
             if (b_find(builder, path, member_name, B_FIND_CALLBACK(b_builder_write_file), flags) < 0) {
-                croak("%s: %s: %s\n", "b_find()", path->str, strerror(errno));
+                b_error * err         = b_builder_get_error(builder);
+                b_string * error_path = b_error_path(err);
+                
+                if (error_path == NULL) {
+                    error_path = path;
+                }
+
+                croak("%s: %s: %s\n", "b_find()", error_path->str, strerror(errno));
             }
-        }
-
-        RETVAL = builder->total;
-
-    OUTPUT:
-        RETVAL
-
-size_t
-builder_archive(builder, ...)
-    Archive::Tar::Builder builder
-
-    CODE:
-        struct builder_options *options = builder->data;
-        b_buffer *buf = b_builder_get_buffer(builder);
-
-        size_t i;
-
-        if (items <= 1) {
-            croak("No paths to archive specified");
-        }
-
-        if (b_buffer_get_fd(buf) == 0) {
-            croak("No file handle set");
-        }
-
-        for (i=1; i<items; i++) {
-            int flags = find_flags(options);
-
-            b_string *path = b_string_new(SvPV_nolen(ST(i)));
-
-            if (b_find(builder, path, path, B_FIND_CALLBACK(b_builder_write_file), flags) < 0) {
-                croak("%s: %s: %s\n", "b_find()", path->str, strerror(errno));
-            }
-
-            b_string_free(path);
         }
 
         RETVAL = builder->total;
@@ -347,7 +306,7 @@ builder_finish(builder)
         b_buffer *buf = b_builder_get_buffer(builder);
         b_error *err  = b_builder_get_error(builder);
 
-        struct builder_options *options = builder->data;
+        enum b_builder_options options = b_builder_get_options(builder);
 
         if (b_buffer_get_fd(buf) == 0) {
             croak("No file handle set");
@@ -357,7 +316,7 @@ builder_finish(builder)
             croak("%s: %s", "b_buffer_flush()", strerror(errno));
         }
 
-        if (b_error_warn(err) && !options->ignore_errors) {
+        if (b_error_warn(err) && !(options & B_BUILDER_IGNORE_ERRORS)) {
             croak("Delayed nonzero exit status");
         }
 
