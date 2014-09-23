@@ -17,6 +17,7 @@ use File::Temp ();
 use File::Path ();
 use IPC::Open3 ();
 use Symbol     ();
+use Errno;
 
 use Archive::Tar::Builder ();
 
@@ -779,10 +780,11 @@ for my $test_mode (
 
         $builder->set_handle($fh);
 
-        throws_ok {
+        eval {
             $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
-        }
-        qr/File name too long/, '$builder->archive_as() croak()s on long filenames without gnu_extensions';
+        };
+
+        ok( $!{'ENAMETOOLONG'}, '$builder->archive_as() croak()s and sets $! to ENAMETOOLONG on long filenames without gnu_extensions' );
     }
 
     {
