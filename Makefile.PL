@@ -16,5 +16,8 @@ $makefile->write(
     'CCFLAGS'      => '-D_FILE_OFFSET_BITS=64',
 
     'PREREQ_PM'      => {},
-    'BUILD_REQUIRES' => { 'Test::Simple' => '0.44' }
+    'BUILD_REQUIRES' => {
+        'Test::Simple'    => '0.44',
+        'Test::Exception' => 0
+    }
 );
