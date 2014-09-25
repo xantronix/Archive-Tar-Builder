@@ -1,3 +1,28 @@
+Version 1.7
+
+    * Fix a variety of unit tests which depended on GNU tar availability as
+      indicated by CPANTS; make provisions for BSD tars as well
+
+    * Make t/lib-Archive-Tar-Builder_bitfile.t only run when TEST_BIGFILE=1 is
+      specified
+
+    * Don't produce archives with mismatched file sizes
+
+    * Implement 'gnu_extensions' flag to make support for arbitrarily long
+      filenames an explicit feature to enable, so as to help end developers
+      avoid producing archives that cannot be extracted by their native tar
+
+    * Set $! to ENAMETOOLONG when long filenames are detected and the
+      aforementioned 'gnu_extensions' flag is not specified
+
+    * Set $! to EINVAL when truncated files are detected
+
+    * Fix an issue in b_error_set() wherein the message actually got clobbered
+      due to a missing 'return' statement
+
+    * Retool $builder->archive_as() to display error names for archive members,
+      rather than their original filenames, in appropriate circumstances
+
 Version 1.6
 
     * Avoid stat() calls on files excluded from archive
