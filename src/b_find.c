@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -171,12 +172,16 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
     b_stack *dirs;
     b_dir *dir;
     struct stat st, item_st;
-    int res;
+    int fd = 0, res, oflags = O_RDONLY | O_NOFOLLOW;
 
     b_error *err = b_builder_get_error(builder);
 
     b_string *clean_path;
     b_string *clean_member_name;
+
+    if (flags & B_FIND_FOLLOW_SYMLINKS) {
+        oflags &= ~O_NOFOLLOW;
+    }
 
     if ((clean_path = b_path_clean(path)) == NULL) {
         goto error_path_clean;
@@ -201,7 +206,17 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
      * callback, then do not bother with traversal code.  Otherwise, all code after
      * these guard clauses pertains to the case of 'path' being a directory.
      */
-    res = callback(builder, clean_path, clean_member_name, &st);
+    if ((st.st_mode & S_IFMT) == S_IFREG) {
+        if ((fd = open(clean_path->str, oflags)) < 0) {
+            goto error_open;
+        }
+    }
+
+    res = callback(builder, clean_path, clean_member_name, &st, fd);
+
+    if (fd > 0) {
+        close(fd);
+    }
 
     if (res == 0) {
         goto cleanup;
@@ -222,6 +237,8 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
     }
 
     if (b_stack_push(dirs, dir) == NULL) {
+        b_dir_destroy(dir);
+
         goto error_stack_push;
     }
 
@@ -229,6 +246,7 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
         b_dir_item *item;
         b_string *new_member_name;
         b_dir *cwd = b_stack_top(dirs);
+        int item_fd = 0;
 
         if (cwd == NULL) {
             break;
@@ -257,8 +275,37 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
             goto cleanup_item;
         }
 
-        if (b_stat(item->path, &item_st, flags) < 0) {
-            goto error_item;
+        if ((item_fd = open(item->path->str, oflags)) < 0) {
+            /*
+             * If O_NOFOLLOW is used (which is default) to open() the current
+             * item, then check for ELOOP; this condition will occur when
+             * attempting to open a symlink.  This means that we will need to
+             * simply use lstat() to retrieve information on the symlink inode
+             * itself.
+             */
+            if ((oflags & O_NOFOLLOW) && errno == ELOOP) {
+                if (lstat(item->path->str, &item_st) < 0) {
+                    if (err) {
+                        b_error_set(err, B_ERROR_WARN, errno, "Cannot lstat() file", item->path);
+                    }
+
+                    goto cleanup_item;
+                }
+            } else {
+                if (err) {
+                    b_error_set(err, B_ERROR_WARN, errno, "Cannot open file", item->path);
+                }
+
+                goto cleanup_item;
+            }
+        } else {
+            if (fstat(item_fd, &item_st) < 0) {
+                if (err) {
+                    b_error_set(err, B_ERROR_WARN, errno, "Cannot fstat() file descriptor", item->path);
+                }
+
+                goto cleanup_item;
+            }
         }
 
         /*
@@ -267,7 +314,7 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
          */
         new_member_name = subst_member_name(clean_path, clean_member_name, item->path);
 
-        res = callback(builder, item->path, new_member_name? new_member_name: item->path, &item_st);
+        res = callback(builder, item->path, new_member_name? new_member_name: item->path, &item_st, item_fd);
 
         b_string_free(new_member_name);
 
@@ -304,11 +351,20 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
         }
 
 cleanup_item:
+        if (item_fd > 0) {
+            close(item_fd);
+            item_fd = 0;
+        }
+
         b_dir_item_free(item);
 
         continue;
 
 error_item:
+        if (item_fd > 0) {
+            close(item_fd);
+        }
+
         b_dir_item_free(item);
 
         goto error_cleanup;
@@ -323,10 +379,14 @@ cleanup:
 
 error_cleanup:
 error_stack_push:
-    b_dir_destroy(dir);
 
 error_dir_open:
 error_callback:
+    if (fd > 0) {
+        close(fd);
+    }
+
+error_open:
 error_stat:
     b_stack_destroy(dirs);
 
