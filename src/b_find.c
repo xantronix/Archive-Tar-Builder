@@ -216,6 +216,7 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
 
     if (fd > 0) {
         close(fd);
+        fd = 0;
     }
 
     if (res == 0) {
@@ -363,6 +364,7 @@ cleanup_item:
 error_item:
         if (item_fd > 0) {
             close(item_fd);
+            item_fd = 0;
         }
 
         b_dir_item_free(item);
@@ -384,6 +386,7 @@ error_dir_open:
 error_callback:
     if (fd > 0) {
         close(fd);
+        fd = 0;
     }
 
 error_open:

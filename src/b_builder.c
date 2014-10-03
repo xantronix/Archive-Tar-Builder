@@ -164,9 +164,9 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
          * headers.
          */
         if (!(builder->options & B_BUILDER_GNU_EXTENSIONS)) {
-            if (err) {
-                errno = ENAMETOOLONG;
+            errno = ENAMETOOLONG;
 
+            if (err) {
                 b_error_set(err, B_ERROR_WARN, errno, "File name too long", member_name);
             }
 
