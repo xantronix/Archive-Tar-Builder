@@ -100,8 +100,7 @@ int b_builder_write_file(
     b_builder *   builder,
     b_string *    path,
     b_string *    member_name,
-    struct stat * st,
-    int           fd
+    struct stat * st
 );
 
 void b_builder_destroy(b_builder *builder);

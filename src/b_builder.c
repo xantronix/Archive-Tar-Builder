@@ -104,9 +104,11 @@ int b_builder_exclude_from_file(b_builder *builder, const char *file) {
     return lafe_exclude_from_file(&builder->match, file);
 }
 
-int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_name, struct stat *st, int fd) {
+int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_name, struct stat *st) {
     b_buffer *buf = builder->buf;
     b_error *err  = builder->err;
+
+    int file_fd = 0;
 
     off_t wrlen = 0;
 
@@ -120,6 +122,16 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
 
     if (err) {
         b_error_clear(err);
+    }
+
+    if ((st->st_mode & S_IFMT) == S_IFREG) {
+        if ((file_fd = open(path->str, O_RDONLY)) < 0) {
+            if (err) {
+                b_error_set(err, B_ERROR_WARN, errno, "Cannot open file", path);
+            }
+
+            goto error_open;
+        }
     }
 
     if ((header = b_header_for_file(path, member_name, st)) == NULL) {
@@ -164,9 +176,9 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
          * headers.
          */
         if (!(builder->options & B_BUILDER_GNU_EXTENSIONS)) {
-            errno = ENAMETOOLONG;
-
             if (err) {
+                errno = ENAMETOOLONG;
+
                 b_error_set(err, B_ERROR_WARN, errno, "File name too long", member_name);
             }
 
@@ -220,8 +232,8 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
     /*
      * Finally, end by writing the file contents.
      */
-    if ((st->st_mode & S_IFMT) == S_IFREG && fd > 0) {
-        if ((wrlen = b_file_write_contents(buf, fd, header->size)) < 0) {
+    if (file_fd) {
+        if ((wrlen = b_file_write_contents(buf, file_fd, header->size)) < 0) {
             if (err) {
                 b_error_set(err, B_ERROR_WARN, errno, "Cannot write file to archive", path);
             }
@@ -230,6 +242,10 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
         }
 
         builder->total += wrlen;
+
+        close(file_fd);
+
+        file_fd = 0;
     }
 
     b_header_destroy(header);
@@ -246,6 +262,11 @@ error_lookup:
     b_header_destroy(header);
 
 error_header_for_file:
+    if (file_fd) {
+        close(file_fd);
+    }
+
+error_open:
     return -1;
 }
 
