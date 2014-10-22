@@ -14,7 +14,7 @@ use XSLoader ();
 
 use Archive::Tar::Builder::UserCache ();
 
-our $VERSION = '1.8';
+our $VERSION = '1.7';
 
 XSLoader::load( 'Archive::Tar::Builder', $VERSION );
 
