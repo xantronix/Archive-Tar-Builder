@@ -125,11 +125,12 @@ builder_new(klass, ...)
             char *key = SvPV_nolen(ST(i));
             SV *value = ST(i+1);
 
-            if (strcmp(key, "quiet")           == 0 && SvIV(value)) options |= B_BUILDER_QUIET;
-            if (strcmp(key, "ignore_errors")   == 0 && SvIV(value)) options |= B_BUILDER_IGNORE_ERRORS;
-            if (strcmp(key, "follow_symlinks") == 0 && SvIV(value)) options |= B_BUILDER_FOLLOW_SYMLINKS;
-            if (strcmp(key, "gnu_extensions")  == 0 && SvIV(value)) options |= B_BUILDER_GNU_EXTENSIONS;
-            if (strcmp(key, "block_factor")    == 0 && SvIV(value)) block_factor = SvIV(value);
+            if (strcmp(key, "quiet")            == 0 && SvIV(value)) options |= B_BUILDER_QUIET;
+            if (strcmp(key, "ignore_errors")    == 0 && SvIV(value)) options |= B_BUILDER_IGNORE_ERRORS;
+            if (strcmp(key, "follow_symlinks")  == 0 && SvIV(value)) options |= B_BUILDER_FOLLOW_SYMLINKS;
+            if (strcmp(key, "gnu_extensions")   == 0 && SvIV(value)) options |= B_BUILDER_GNU_EXTENSIONS;
+            if (strcmp(key, "posix_extensions") == 0 && SvIV(value)) options |= B_BUILDER_PAX_EXTENSIONS;
+            if (strcmp(key, "block_factor")     == 0 && SvIV(value)) block_factor = SvIV(value);
         }
 
         if ((builder = b_builder_new(block_factor)) == NULL) {

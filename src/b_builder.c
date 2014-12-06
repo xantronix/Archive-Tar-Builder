@@ -163,7 +163,7 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
          * GNU extensions must be explicitly enabled to encode GNU LongLink
          * headers.
          */
-        if (!(builder->options & B_BUILDER_GNU_EXTENSIONS)) {
+        if (!(builder->options & B_BUILDER_EXTENSIONS_MASK)) {
             errno = ENAMETOOLONG;
 
             if (err) {
@@ -187,21 +187,41 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
             }
         }
 
-        if (b_header_encode_longlink_block(block, longlink_path) == NULL) {
-            goto error_header_encode;
-        }
-
-        builder->total += wrlen;
-
-        if ((wrlen = b_file_write_path_blocks(buf, longlink_path)) < 0) {
-            if (err) {
-                b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", member_name);
+        if (builder->options & B_BUILDER_GNU_EXTENSIONS) {
+            if (b_header_encode_longlink_block(block, longlink_path) == NULL) {
+                goto error_header_encode;
             }
 
-            goto error_write;
+            builder->total += wrlen;
+
+            if ((wrlen = b_file_write_path_blocks(buf, longlink_path)) < 0) {
+                if (err) {
+                    b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", member_name);
+                }
+
+                goto error_write;
+            }
+
+            builder->total += wrlen;
+        }
+        else if (builder->options & B_BUILDER_PAX_EXTENSIONS) {
+            if (b_header_encode_pax_block(block, header, longlink_path) == NULL) {
+                goto error_header_encode;
+            }
+
+            builder->total += wrlen;
+
+            if ((wrlen = b_file_write_pax_path_blocks(buf, longlink_path)) < 0) {
+                if (err) {
+                    b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", member_name);
+                }
+
+                goto error_write;
+            }
+
+            builder->total += wrlen;
         }
 
-        builder->total += wrlen;
     }
 
     /*

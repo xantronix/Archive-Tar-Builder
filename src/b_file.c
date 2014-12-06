@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -36,6 +37,55 @@ off_t b_file_write_path_blocks(b_buffer *buf, b_string *path) {
         }
 
         memcpy(block, path->str + i, copylen);
+
+        total += blocklen;
+    }
+
+    return total;
+
+error_io:
+    return -1;
+}
+
+off_t b_file_write_pax_path_blocks(b_buffer *buf, b_string *path) {
+    size_t i, len, full_len, buflen;
+    ssize_t blocklen = 0;
+    off_t total = 0;
+    char shortbuf[32];
+
+    len = b_string_len(path);
+
+    full_len = b_header_compute_pax_length(path);
+
+    /* In case we have a broken snprintf. */
+    if (full_len == (size_t)-1)
+        goto error_io;
+
+    buflen = snprintf(shortbuf, sizeof(shortbuf), "%d path=", full_len);
+
+    for (i=0; i<full_len; i+=B_BLOCK_SIZE) {
+        size_t offset  = i == 0 ? buflen : 0;
+        size_t left    = full_len - i - offset;
+        size_t copylen = left < B_BLOCK_SIZE? left: B_BLOCK_SIZE;
+
+        unsigned char *block;
+
+        if ((block = b_buffer_get_block(buf, B_BLOCK_SIZE, &blocklen)) == NULL) {
+            goto error_io;
+        }
+
+        /* First block. */
+        if (i == 0) {
+            memcpy(block, shortbuf, buflen);
+        }
+
+        memcpy(block + offset, path->str + i, copylen);
+
+        /* Last block. */
+        if (i + B_BLOCK_SIZE >= full_len) {
+            uint8_t *buf = block;
+            buf[offset + copylen - 1] = '\n';
+        }
 
         total += blocklen;
     }

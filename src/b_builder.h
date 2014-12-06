@@ -25,7 +25,10 @@ enum b_builder_options {
     B_BUILDER_QUIET           = 1 << 0,
     B_BUILDER_IGNORE_ERRORS   = 1 << 1,
     B_BUILDER_FOLLOW_SYMLINKS = 1 << 2,
-    B_BUILDER_GNU_EXTENSIONS  = 1 << 3
+    B_BUILDER_GNU_EXTENSIONS  = 1 << 3,
+    B_BUILDER_PAX_EXTENSIONS  = 1 << 4,
+    B_BUILDER_EXTENSIONS_MASK = (B_BUILDER_GNU_EXTENSIONS |
+                                 B_BUILDER_PAX_EXTENSIONS)
 };
 
 typedef int (*b_lookup_service)(
