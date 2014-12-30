@@ -222,6 +222,8 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
     }
 
     if (b_stack_push(dirs, dir) == NULL) {
+        b_dir_destroy(dir);
+
         goto error_stack_push;
     }
 
@@ -323,8 +325,6 @@ cleanup:
 
 error_cleanup:
 error_stack_push:
-    b_dir_destroy(dir);
-
 error_dir_open:
 error_callback:
 error_stat:
