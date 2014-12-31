@@ -1,3 +1,12 @@
+Version 1.9
+
+    * Fix a bug in b_find() wherein some error recovery code tried to destroy
+      the same object twice, potentially
+
+Version 1.8
+
+    [redacted for secret government purposes]
+
 Version 1.7
 
     * Fix a variety of unit tests which depended on GNU tar availability as
