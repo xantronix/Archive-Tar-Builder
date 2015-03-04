@@ -260,7 +260,14 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
         }
 
         if (b_stat(item->path, &item_st, flags) < 0) {
-            goto error_item;
+            if (err) {
+                b_error_set(err, B_ERROR_WARN, errno, "Unable to stat file", item->path);
+            }
+            if (errno == EACCES) {
+                goto cleanup_item;
+            } else {
+                goto error_item;
+            }
         }
 
         /*
