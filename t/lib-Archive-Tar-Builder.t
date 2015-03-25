@@ -21,8 +21,9 @@ use Errno;
 
 use Archive::Tar::Builder ();
 
-use Test::More tests => 58;
+use Test::More tests => 60;
 use Test::Exception;
+use Test::Warn;
 
 sub find_tar {
     my @PATH     = qw( /usr/local/bin /usr/bin /bin );
@@ -120,7 +121,7 @@ my $tar     = find_tar();
 }
 
 SKIP: {
-    skip( 'Cannot test permissions failures as root', 2 ) if $< == 0;
+    skip( 'Cannot test permissions failures as root', 4 ) if $< == 0;
 
     my $tmp = File::Temp::tempdir( 'CLEANUP' => 1 );
     my $dir = "$tmp/foo";
@@ -151,6 +152,23 @@ SKIP: {
     eval { $builder->finish(); };
 
     ok( !$@, '$builder->finish() does not die() if "ignore_errors" is set for non-fatals' );
+
+    chmod( 0700, $dir );
+    File::Path::mkpath("$dir/file");
+    chmod( 0600, $dir );
+
+    $builder = Archive::Tar::Builder->new();
+
+    open( $fh, '>', '/dev/null' ) or die("Unable to open /dev/null: $!");
+
+    $builder->set_handle($fh);
+    warning_like { $builder->archive($tmp) } qr{\Q$dir/file\E.*Permission denied}, '$builder->archive produces the expected warning for missing archive';
+
+    eval { $builder->finish(); };
+
+    like( $@ => qr/^Delayed nonzero exit/, '$builder->finish() die()s for inaccessible directory' );
+
+    undef $@;
 }
 
 #
@@ -780,9 +798,7 @@ for my $test_mode (
 
         $builder->set_handle($fh);
 
-        eval {
-            $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
-        };
+        eval { $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 ); };
 
         ok( $!{'ENAMETOOLONG'}, '$builder->archive_as() croak()s and sets $! to ENAMETOOLONG on long filenames without gnu_extensions' );
     }

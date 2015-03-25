@@ -18,6 +18,7 @@ $makefile->write(
     'PREREQ_PM'      => {},
     'BUILD_REQUIRES' => {
         'Test::Simple'    => '0.44',
-        'Test::Exception' => 0
+        'Test::Exception' => 0,
+        'Test::Warn'      => 0
     }
 );
