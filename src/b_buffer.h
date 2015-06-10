@@ -18,6 +18,7 @@
 
 typedef struct _b_buffer {
     int    fd;
+    int    is_pipe;
     size_t size;
     size_t unused;
     void * data;
