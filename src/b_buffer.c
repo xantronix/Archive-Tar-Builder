@@ -2,6 +2,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#ifdef __linux__
+#include <sys/stat.h>
+#include <sys/utsname.h>
+#include <stdio.h>
+#endif
 #include "b_buffer.h"
 
 b_buffer *b_buffer_new(size_t factor) {
@@ -11,9 +16,10 @@ b_buffer *b_buffer_new(size_t factor) {
         goto error_malloc;
     }
 
-    buf->fd     = 0;
-    buf->size   = factor? factor * B_BUFFER_BLOCK_SIZE: B_BUFFER_DEFAULT_FACTOR * B_BUFFER_BLOCK_SIZE;
-    buf->unused = buf->size;
+    buf->fd         = 0;
+    buf->can_splice = 0;
+    buf->size       = factor? factor * B_BUFFER_BLOCK_SIZE: B_BUFFER_DEFAULT_FACTOR * B_BUFFER_BLOCK_SIZE;
+    buf->unused     = buf->size;
 
     if ((buf->data = malloc(buf->size)) == NULL) {
         goto error_malloc_buf;
@@ -24,9 +30,10 @@ b_buffer *b_buffer_new(size_t factor) {
     return buf;
 
 error_malloc_buf:
-    buf->data = NULL;
-    buf->fd   = 0;
-    buf->size = 0;
+    buf->data       = NULL;
+    buf->can_splice = 0;
+    buf->fd         = 0;
+    buf->size       = 0;
 
     free(buf);
 
@@ -41,9 +48,39 @@ int b_buffer_get_fd(b_buffer *buf) {
 }
 
 void b_buffer_set_fd(b_buffer *buf, int fd) {
+#ifdef __linux__
+    struct stat st;
+    char *release, *kernel, *major, *minor;
+    int kernel_v, major_v, minor_v;
+    struct utsname unameData;
+    int uname_ok;
+#endif
     if (buf == NULL) return;
 
-    buf->fd = fd;
+    buf->fd         = fd;
+    buf->can_splice = 0;
+#ifdef __linux__
+    if (fstat(fd, &st) == 0) {
+        if (S_ISFIFO(st.st_mode)) {
+            uname_ok = uname(&unameData);
+            if (uname_ok != -1) {
+                release = unameData.release;
+                kernel = strtok(release, ".");
+                major = strtok(NULL, ".");
+                minor = strtok(NULL, ".");
+                if (release && major && minor) {
+                    kernel_v = strtol(kernel,NULL,10);
+                    major_v = strtol(major,NULL,10);
+                    minor_v = strtol(minor,NULL,10);
+                    if (kernel_v >= 3 || (kernel_v == 2 && major_v == 6 && minor_v >= 31) ) {
+                        buf->can_splice = 1;
+                    }
+                }
+            }
+        }
+    }
+#endif
+    return;
 }
 
 size_t b_buffer_size(b_buffer *buf) {
