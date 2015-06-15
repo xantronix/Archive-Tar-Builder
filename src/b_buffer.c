@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/stat.h>
 #include "b_buffer.h"
 
 b_buffer *b_buffer_new(size_t factor) {
@@ -11,9 +12,10 @@ b_buffer *b_buffer_new(size_t factor) {
         goto error_malloc;
     }
 
-    buf->fd     = 0;
-    buf->size   = factor? factor * B_BUFFER_BLOCK_SIZE: B_BUFFER_DEFAULT_FACTOR * B_BUFFER_BLOCK_SIZE;
-    buf->unused = buf->size;
+    buf->fd      = 0;
+    buf->is_pipe = 0;
+    buf->size    = factor? factor * B_BUFFER_BLOCK_SIZE: B_BUFFER_DEFAULT_FACTOR * B_BUFFER_BLOCK_SIZE;
+    buf->unused  = buf->size;
 
     if ((buf->data = malloc(buf->size)) == NULL) {
         goto error_malloc_buf;
@@ -24,9 +26,10 @@ b_buffer *b_buffer_new(size_t factor) {
     return buf;
 
 error_malloc_buf:
-    buf->data = NULL;
-    buf->fd   = 0;
-    buf->size = 0;
+    buf->data    = NULL;
+    buf->is_pipe = 0;
+    buf->fd      = 0;
+    buf->size    = 0;
 
     free(buf);
 
@@ -41,9 +44,16 @@ int b_buffer_get_fd(b_buffer *buf) {
 }
 
 void b_buffer_set_fd(b_buffer *buf, int fd) {
+    struct stat st;
     if (buf == NULL) return;
 
-    buf->fd = fd;
+    buf->fd      = fd;
+    buf->is_pipe = 0;
+    if ( fstat(fd, &st) == 0 ) {
+        buf->is_pipe = S_ISFIFO(st.st_mode) ? 1 : 0;
+    }
+
+    return;
 }
 
 size_t b_buffer_size(b_buffer *buf) {
