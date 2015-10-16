@@ -189,7 +189,8 @@ error:
 }
 
 ssize_t b_buffer_flush(b_buffer *buf) {
-    ssize_t ret;
+    ssize_t ret = 0;
+    ssize_t off = 0;
 
     if (buf == NULL || buf->data == NULL) {
         errno = EINVAL;
@@ -204,8 +205,17 @@ ssize_t b_buffer_flush(b_buffer *buf) {
     if (buf->size == 0)           return 0;
     if (buf->unused == buf->size) return 0;
 
-    if ((ret = write(buf->fd, buf->data, buf->size)) < 0) {
-        return ret;
+    while ((off < buf->size) || (ret < 0 && errno == EINTR)) {
+        if ((ret = write(buf->fd, buf->data + off, buf->size - off)) < 0) {
+            if (errno != EINTR)
+                return ret;
+        }
+        else if (!ret) {
+            break;
+        }
+        else {
+            off += ret;
+        }
     }
 
     memset(buf->data, 0x00, buf->size);
