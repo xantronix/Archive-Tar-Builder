@@ -44,6 +44,7 @@
 #define B_HEADER_EMPTY_CHECKSUM  "\x20\x20\x20\x20\x20\x20\x20\x20"
 #define B_HEADER_LONGLINK_PATH   "././@LongLink"
 #define B_HEADER_LONGLINK_TYPE   'L'
+#define B_HEADER_PAX_TYPE        'x'
 
 #define B_HEADER_MODE_FORMAT      "%.7o"
 #define B_HEADER_UID_FORMAT       "%.7o"
@@ -99,6 +100,8 @@ b_header *       b_header_for_file(b_string *path, b_string *member_name, struct
 int              b_header_set_usernames(b_header *header, b_string *user, b_string *group);
 b_header_block * b_header_encode_block(b_header_block *block, b_header *header);
 b_header_block * b_header_encode_longlink_block(b_header_block *block, b_string *path);
+b_header_block * b_header_encode_pax_block(b_header_block *block, b_header *header, b_string *path);
+size_t           b_header_compute_pax_length(b_string *path);
 void             b_header_destroy(b_header *header);
 
 #endif /* _B_HEADER_H */

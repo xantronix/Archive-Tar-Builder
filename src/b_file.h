@@ -19,5 +19,6 @@
 
 off_t b_file_write_contents(b_buffer *buf, int file_fd, off_t file_size);
 off_t b_file_write_path_blocks(b_buffer *buf, b_string *path);
+off_t b_file_write_pax_path_blocks(b_buffer *buf, b_string *path);
 
 #endif /* _B_FILE_H */

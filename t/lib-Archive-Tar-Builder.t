@@ -21,7 +21,7 @@ use Errno;
 
 use Archive::Tar::Builder ();
 
-use Test::More tests => 58;
+use Test::More tests => 63;
 use Test::Exception;
 
 sub find_tar {
@@ -451,15 +451,15 @@ SKIP: {
 }
 
 # Test long filenames, symlinks
-{
+foreach my $ext (qw/gnu posix/) {
     my $tmpdir = File::Temp::tempdir( 'CLEANUP' => 1 );
-    my $path = "$tmpdir/" . ( 'foops/' x 30 );
+    my $path = "$tmpdir/" . ( 'foops/' x 60 );
 
     File::Path::mkpath($path) or die("Unable to create long path: $!");
 
     symlink( 'foo', "$tmpdir/bar" ) or die("Unable to symlink() $tmpdir/bar to foo: $!");
 
-    my $archive = Archive::Tar::Builder->new( 'gnu_extensions' => 1 );
+    my $archive = Archive::Tar::Builder->new( "${ext}_extensions" => 1 );
 
     my $err = Symbol::gensym();
 
@@ -799,6 +799,20 @@ for my $test_mode (
             $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
         }
         '$builder->archive_as() will NOT croak() on long filenames when gnu_extensions is passed';
+    }
+
+    {
+        my $builder = Archive::Tar::Builder->new(
+            'quiet'            => 1,
+            'posix_extensions' => 1
+        );
+
+        $builder->set_handle($fh);
+
+        lives_ok {
+            $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
+        }
+        '$builder->archive_as() will NOT croak() on long filenames when posix_extensions is passed';
     }
 
     close $fh;

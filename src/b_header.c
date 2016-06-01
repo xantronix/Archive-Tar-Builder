@@ -81,6 +81,24 @@ static inline void encode_checksum(b_header_block *block) {
     block->checksum[7] = ' ';
 }
 
+size_t b_header_compute_pax_length(b_string *path) {
+    size_t len, i;
+    char shortbuf[32];
+
+    len = b_string_len(path);
+
+    /* snprintf returns the number of characters (excluding the NUL) we would
+     * have written had space been available.  Iterate three times to be sure
+     * the value is stable.
+     */
+    for (i=0; i<3; i++) {
+        len = snprintf(shortbuf, sizeof(shortbuf), "%d path=%s\n", len, path->str);
+    }
+
+    return len;
+}
+
+
 b_header_block *b_header_encode_block(b_header_block *block, b_header *header) {
     if (header->suffix) {
         strncpy(block->suffix, header->suffix->str, 100);
@@ -134,6 +152,20 @@ b_header_block *b_header_encode_longlink_block(b_header_block *block, b_string *
     snprintf(block->size,   B_HEADER_SIZE_SIZE,   B_HEADER_INT_SIZE_FORMAT,   b_string_len(path));
 
     block->linktype = B_HEADER_LONGLINK_TYPE;
+
+    encode_checksum(block);
+
+    return block;
+}
+
+b_header_block *b_header_encode_pax_block(b_header_block *block, b_header *header, b_string *path) {
+	b_header_encode_block(block, header);
+
+    snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_LONG_SIZE_FORMAT, b_header_compute_pax_length(path));
+
+	memset(block->prefix, 0, sizeof(block->prefix));
+	snprintf(block->prefix, sizeof(block->prefix), "./PaxHeaders.%d", getpid());
+    block->linktype = B_HEADER_PAX_TYPE;
 
     encode_checksum(block);
 
