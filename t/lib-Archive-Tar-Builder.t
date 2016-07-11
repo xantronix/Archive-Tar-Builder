@@ -21,7 +21,7 @@ use Errno;
 
 use Archive::Tar::Builder ();
 
-use Test::More tests => 63;
+use Test::More tests => 67;
 use Test::Exception;
 
 sub find_tar {
@@ -457,13 +457,18 @@ foreach my $ext (qw/gnu posix/) {
 
     File::Path::mkpath($path) or die("Unable to create long path: $!");
 
-    symlink( 'foo', "$tmpdir/bar" ) or die("Unable to symlink() $tmpdir/bar to foo: $!");
+    my $long_symlink = "${path}foo";
+    $long_symlink =~ s/^\///;
+    $long_symlink =~ s/\/$//;
+
+    symlink( 'foo',         "$tmpdir/bar" ) or die("Unable to symlink() $tmpdir/bar to foo: $!");
+    symlink( $long_symlink, "$tmpdir/baz" ) or die("Unable to symlink() $tmpdir/baz to $long_symlink: $!");
 
     my $archive = Archive::Tar::Builder->new( "${ext}_extensions" => 1 );
 
     my $err = Symbol::gensym();
 
-    my $reader_pid = IPC::Open3::open3( my ( $in, $out ), $err, $tar, '-tf', '-' );
+    my $reader_pid = IPC::Open3::open3( my ( $in, $out ), $err, $tar, '-tvf', '-' );
     my $writer_pid = fork();
 
     if ( !defined $writer_pid ) {
@@ -483,6 +488,7 @@ foreach my $ext (qw/gnu posix/) {
     vec( $rin, fileno($err), 1 ) = 1;
 
     my %FOUND;
+    my %SYMLINKS;
 
     close $in;
 
@@ -518,8 +524,10 @@ foreach my $ext (qw/gnu posix/) {
     foreach my $item ( split "\n", $paths ) {
         $item =~ s/^\///;
         $item =~ s/\/$//;
+        $item =~ s/^.*?\s\/?(\S+)(?:\s->\s\/?(\S+))?$/$1/;
 
         $FOUND{$item} = 1;
+        $SYMLINKS{$2} = 1 if defined $2;
     }
 
     close $err;
@@ -557,6 +565,8 @@ foreach my $ext (qw/gnu posix/) {
 
         ok( $FOUND{$path},             "\$archive->finish() properly encoded a long pathname for directory for $path" );
         ok( $FOUND{$expected_symlink}, '$archive->archive() properly encoded a symlink' );
+        ok( $SYMLINKS{'foo'},          '$archive->archive() found expected symlink' );
+        ok( $SYMLINKS{$long_symlink},  '$archive->archive() found long symlink' );
     }
 }
 
@@ -780,9 +790,7 @@ for my $test_mode (
 
         $builder->set_handle($fh);
 
-        eval {
-            $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 );
-        };
+        eval { $builder->archive_as( '/etc/hosts' => 'BLEH' x 60 ); };
 
         ok( $!{'ENAMETOOLONG'}, '$builder->archive_as() croak()s and sets $! to ENAMETOOLONG on long filenames without gnu_extensions' );
     }

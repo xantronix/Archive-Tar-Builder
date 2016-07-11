@@ -104,6 +104,33 @@ int b_builder_exclude_from_file(b_builder *builder, const char *file) {
     return lafe_exclude_from_file(&builder->match, file);
 }
 
+static int encode_longlink(b_builder *builder, b_header_block *block, b_string *path, int type, off_t *wrlen) {
+    b_buffer *buf = builder->buf;
+    b_error *err  = builder->err;
+
+    /* Nothing to do. */
+    if (path == NULL) {
+        return 0;
+    }
+
+    if (b_header_encode_longlink_block(block, path, type) == NULL) {
+        return -1;
+    }
+
+    builder->total += *wrlen;
+
+    if ((*wrlen = b_file_write_path_blocks(buf, path)) < 0) {
+        if (err) {
+            b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", path);
+        }
+
+        return -1;
+    }
+
+    builder->total += *wrlen;
+    return 0;
+}
+
 int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_name, struct stat *st) {
     b_buffer *buf = builder->buf;
     b_error *err  = builder->err;
@@ -168,7 +195,7 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
      * longlink header, followed by the blocks containing the path name to be
      * assigned.
      */
-    if (header->truncated) {
+    if (header->truncated || header->truncated_link) {
         b_string *longlink_path;
 
         /*
@@ -202,21 +229,12 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
         }
 
         if (builder->options & B_BUILDER_GNU_EXTENSIONS) {
-            if (b_header_encode_longlink_block(block, longlink_path) == NULL) {
+            if (header->truncated && encode_longlink(builder, block, longlink_path, B_HEADER_LONGLINK_TYPE, &wrlen) < 0) {
                 goto error_header_encode;
             }
-
-            builder->total += wrlen;
-
-            if ((wrlen = b_file_write_path_blocks(buf, longlink_path)) < 0) {
-                if (err) {
-                    b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", member_name);
-                }
-
-                goto error_write;
+            if (header->truncated_link && encode_longlink(builder, block, header->linkdest, B_HEADER_LONGDEST_TYPE, &wrlen) < 0) {
+                goto error_header_encode;
             }
-
-            builder->total += wrlen;
         }
         else if (builder->options & B_BUILDER_PAX_EXTENSIONS) {
             if (b_header_encode_pax_block(block, header, longlink_path) == NULL) {
@@ -225,7 +243,7 @@ int b_builder_write_file(b_builder *builder, b_string *path, b_string *member_na
 
             builder->total += wrlen;
 
-            if ((wrlen = b_file_write_pax_path_blocks(buf, longlink_path)) < 0) {
+            if ((wrlen = b_file_write_pax_path_blocks(buf, longlink_path, header->linkdest)) < 0) {
                 if (err) {
                     b_error_set(err, B_ERROR_FATAL, errno, "Cannot write long filename header", member_name);
                 }

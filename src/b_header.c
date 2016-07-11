@@ -81,7 +81,7 @@ static inline void encode_checksum(b_header_block *block) {
     block->checksum[7] = ' ';
 }
 
-size_t b_header_compute_pax_length(b_string *path) {
+size_t b_header_compute_pax_length(b_string *path, const char *record) {
     size_t len, i;
     char shortbuf[32];
 
@@ -92,7 +92,7 @@ size_t b_header_compute_pax_length(b_string *path) {
      * the value is stable.
      */
     for (i=0; i<3; i++) {
-        len = snprintf(shortbuf, sizeof(shortbuf), "%d path=%s\n", len, path->str);
+        len = snprintf(shortbuf, sizeof(shortbuf), "%d %s=%s\n", len, record, path->str);
     }
 
     return len;
@@ -146,12 +146,12 @@ b_header_block *b_header_encode_block(b_header_block *block, b_header *header) {
     return block;
 }
 
-b_header_block *b_header_encode_longlink_block(b_header_block *block, b_string *path) {
+b_header_block *b_header_encode_longlink_block(b_header_block *block, b_string *path, int type) {
     memcpy(  block->magic,  B_HEADER_MAGIC,       B_HEADER_MAGIC_SIZE);
     snprintf(block->suffix, B_HEADER_SUFFIX_SIZE, B_HEADER_LONGLINK_PATH);
     snprintf(block->size,   B_HEADER_SIZE_SIZE,   B_HEADER_INT_SIZE_FORMAT,   b_string_len(path));
 
-    block->linktype = B_HEADER_LONGLINK_TYPE;
+    block->linktype = type;
 
     encode_checksum(block);
 
@@ -159,9 +159,14 @@ b_header_block *b_header_encode_longlink_block(b_header_block *block, b_string *
 }
 
 b_header_block *b_header_encode_pax_block(b_header_block *block, b_header *header, b_string *path) {
+    size_t pax_len = b_header_compute_pax_length(path, "path");
+
+    if (header->linkdest)
+        pax_len += b_header_compute_pax_length(header->linkdest, "linkpath");
+
 	b_header_encode_block(block, header);
 
-    snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_LONG_SIZE_FORMAT, b_header_compute_pax_length(path));
+    snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_LONG_SIZE_FORMAT, pax_len);
 
 	memset(block->prefix, 0, sizeof(block->prefix));
 	snprintf(block->prefix, sizeof(block->prefix), "./PaxHeaders.%d", getpid());
@@ -332,9 +337,14 @@ b_header *b_header_for_file(b_string *path, b_string *member_name, struct stat *
     ret->major = 0;
     ret->minor = 0;
 
+    ret->truncated_link = 0;
+
     if ((st->st_mode & S_IFMT) == S_IFLNK) {
         if ((ret->linkdest = b_readlink(path, st)) == NULL) {
             goto error_readlink;
+        }
+        if (b_string_len(ret->linkdest) > B_HEADER_LINKDEST_SIZE) {
+            ret->truncated_link = 1;
         }
     }
 
