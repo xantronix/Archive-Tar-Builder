@@ -47,52 +47,53 @@ error_io:
     return -1;
 }
 
-off_t b_file_write_pax_path_blocks(b_buffer *buf, b_string *path) {
-    size_t i, len, full_len, buflen;
+off_t b_file_write_pax_path_blocks(b_buffer *buf, b_string *path, b_string *linkdest) {
+    size_t i, len, full_len, link_full_len = 0, buflen, total_len;
     ssize_t blocklen = 0;
     off_t total = 0;
-    char shortbuf[32];
+    char *buffer = NULL;
 
     len = b_string_len(path);
 
-    full_len = b_header_compute_pax_length(path);
+    full_len = b_header_compute_pax_length(path, "path");
+
+    if (linkdest)
+        link_full_len = b_header_compute_pax_length(linkdest, "linkpath");
+
+    total_len = full_len + link_full_len;
 
     /* In case we have a broken snprintf. */
     if (full_len == (size_t)-1)
         goto error_io;
 
-    buflen = snprintf(shortbuf, sizeof(shortbuf), "%d path=", full_len);
+    if ((buffer = malloc(total_len + 1)) == NULL)
+        goto error_mem;
 
-    for (i=0; i<full_len; i+=B_BLOCK_SIZE) {
-        size_t offset  = i == 0 ? buflen : 0;
-        size_t left    = full_len - i - offset;
+    snprintf(buffer, total_len + 1, "%d path=%s\n", full_len, path->str);
+    if (linkdest)
+        snprintf(buffer + full_len, link_full_len + 1, "%d linkpath=%s\n", link_full_len, linkdest->str);
+
+    for (i=0; i<total_len; i+=B_BLOCK_SIZE) {
+        size_t left    = total_len - i;
         size_t copylen = left < B_BLOCK_SIZE? left: B_BLOCK_SIZE;
 
         unsigned char *block;
+
 
         if ((block = b_buffer_get_block(buf, B_BLOCK_SIZE, &blocklen)) == NULL) {
             goto error_io;
         }
 
-        /* First block. */
-        if (i == 0) {
-            memcpy(block, shortbuf, buflen);
-        }
-
-        memcpy(block + offset, path->str + i, copylen);
-
-        /* Last block. */
-        if (i + B_BLOCK_SIZE >= full_len) {
-            uint8_t *buf = block;
-            buf[offset + copylen - 1] = '\n';
-        }
-
+        memcpy(block, buffer + i, copylen);
         total += blocklen;
     }
 
+    free(buffer);
     return total;
 
 error_io:
+error_mem:
+    free(buffer);
     return -1;
 }
 
