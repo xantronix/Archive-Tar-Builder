@@ -115,7 +115,9 @@ off_t b_file_write_contents(b_buffer *buf, int file_fd, off_t file_size) {
             if (b_buffer_flush(buf) < 0) {
                 goto error_io;
             }
+#ifdef __linux__
             emptied_buffer = 1;
+#endif
         }
 
         max_read = file_size - real_total;
