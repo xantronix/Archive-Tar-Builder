@@ -27,7 +27,7 @@
  */
 off_t b_file_write_path_blocks(b_buffer *buf, b_string *path) {
     size_t i, len;
-    ssize_t blocklen = 0;
+    off_t blocklen = 0;
     off_t total = 0;
 
     len = b_string_len(path);
@@ -55,7 +55,7 @@ error_io:
 
 off_t b_file_write_pax_path_blocks(b_buffer *buf, b_string *path, b_string *linkdest) {
     size_t i, len, full_len, link_full_len = 0, buflen, total_len;
-    ssize_t blocklen = 0;
+    off_t blocklen = 0;
     off_t total = 0;
     char *buffer = NULL;
 
@@ -104,8 +104,8 @@ error_mem:
 }
 
 off_t b_file_write_contents(b_buffer *buf, int file_fd, off_t file_size) {
-    ssize_t rlen = 0, blocklen = 0;
-    off_t total = 0, real_total = 0, max_read = 0;
+    ssize_t rlen = 0;
+    off_t blocklen = 0, total = 0, real_total = 0, max_read = 0;
 #ifdef __linux__
     int emptied_buffer = 0, splice_total = 0;
 #endif

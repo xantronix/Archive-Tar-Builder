@@ -125,7 +125,7 @@ off_t b_buffer_reclaim(b_buffer *buf, size_t used, size_t given) {
     return amount;
 }
 
-void *b_buffer_get_block(b_buffer *buf, size_t len, ssize_t *given) {
+void *b_buffer_get_block(b_buffer *buf, size_t len, off_t *given) {
     size_t offset;
     size_t padded_len = padded_size(len);
 

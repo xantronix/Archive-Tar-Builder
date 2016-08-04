@@ -31,7 +31,7 @@ size_t     b_buffer_size(b_buffer *buf);
 size_t     b_buffer_unused(b_buffer *buf);
 int        b_buffer_full(b_buffer *buf);
 off_t      b_buffer_reclaim(b_buffer *buf, size_t used, size_t given);
-void *     b_buffer_get_block(b_buffer *buf, size_t len, ssize_t *given);
+void *     b_buffer_get_block(b_buffer *buf, size_t len, off_t *given);
 ssize_t    b_buffer_flush(b_buffer *buf);
 void       b_buffer_reset(b_buffer *buf);
 void       b_buffer_destroy(b_buffer *buf);
