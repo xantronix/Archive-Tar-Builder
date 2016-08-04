@@ -166,7 +166,7 @@ b_header_block *b_header_encode_pax_block(b_header_block *block, b_header *heade
 
 	b_header_encode_block(block, header);
 
-    snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_LONG_SIZE_FORMAT, pax_len);
+    snprintf(block->size, B_HEADER_SIZE_SIZE, B_HEADER_LONG_SIZE_FORMAT, (unsigned long long)pax_len);
 
 	memset(block->prefix, 0, sizeof(block->prefix));
 	snprintf(block->prefix, sizeof(block->prefix), "./PaxHeaders.%d", getpid());
