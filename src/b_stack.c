@@ -87,7 +87,7 @@ void *b_stack_pop(b_stack *stack) {
     stack->count--;
 
     if (index == stack->size - (stack->growth_factor * 2)) {
-        if (b_stack_resize(stack, stack->count - stack->growth_factor) == NULL) {
+        if (b_stack_resize(stack, stack->size - stack->growth_factor) == NULL) {
             goto error_resize;
         }
     }
@@ -116,7 +116,7 @@ void *b_stack_shift(b_stack *stack) {
     stack->count--;
 
     if (last == stack->size - (stack->growth_factor * 2)) {
-        if (b_stack_resize(stack, stack->count - stack->growth_factor) == NULL) {
+        if (b_stack_resize(stack, stack->size - stack->growth_factor) == NULL) {
             goto error_resize;
         }
     }
