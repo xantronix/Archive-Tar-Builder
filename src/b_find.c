@@ -203,9 +203,10 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
     }
 
     /*
-     * If the item we're dealing with is not a directory, or is not wanted by the
-     * callback, then do not bother with traversal code.  Otherwise, all code after
-     * these guard clauses pertains to the case of 'path' being a directory.
+     * If the item we're dealing with is not a directory, or is not wanted by
+     * the callback, then do not bother with traversal code.  Otherwise, all
+     * code after these guard clauses pertains to the case of 'path' being a
+     * directory.
      */
     if ((st.st_mode & S_IFMT) == S_IFREG) {
         if ((fd = open(clean_path->str, oflags)) < 0) {
