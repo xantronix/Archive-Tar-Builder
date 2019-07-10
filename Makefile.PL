@@ -1,3 +1,5 @@
+use lib '.';
+
 require 'mk/MY.pm';
 require 'mk/MY/Makefile.pm';
 
