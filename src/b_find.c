@@ -302,8 +302,22 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
                     goto cleanup_item;
                 }
             } else {
-                if (err) {
-                    b_error_set(err, B_ERROR_WARN, errno, "Cannot open file", item->path);
+                if( flags & B_FIND_IGNORE_SOCKETS ) {
+                    if (stat(item->path->str, &item_st) < 0) {
+                        if (err) {
+                            b_error_set(err, B_ERROR_WARN, errno, "Cannot stat() file", item->path);
+                        }
+                    }
+                    else {
+                        if( err && (item_st.st_mode & S_IFMT) != S_IFSOCK ) {
+                            b_error_set(err, B_ERROR_WARN, errno, "Cannot open file", item->path);
+                        }
+                    }
+                }
+                else {
+                    if (err) {
+                        b_error_set(err, B_ERROR_WARN, errno, "Cannot open file", item->path);
+                    }
                 }
 
                 goto cleanup_item;

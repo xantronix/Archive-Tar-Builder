@@ -100,6 +100,10 @@ static int find_flags(enum b_builder_options options) {
         flags |= B_FIND_FOLLOW_SYMLINKS;
     }
 
+    if (options & B_BUILDER_IGNORE_SOCKETS) {
+        flags |= B_FIND_IGNORE_SOCKETS;
+    }
+
     return flags;
 }
 
@@ -130,6 +134,7 @@ builder_new(klass, ...)
             if (strcmp(key, "follow_symlinks")  == 0 && SvIV(value)) options |= B_BUILDER_FOLLOW_SYMLINKS;
             if (strcmp(key, "gnu_extensions")   == 0 && SvIV(value)) options |= B_BUILDER_GNU_EXTENSIONS;
             if (strcmp(key, "posix_extensions") == 0 && SvIV(value)) options |= B_BUILDER_PAX_EXTENSIONS;
+            if (strcmp(key, "ignore_sockets")   == 0 && SvIV(value)) options |= B_BUILDER_IGNORE_SOCKETS;
             if (strcmp(key, "block_factor")     == 0 && SvIV(value)) block_factor = SvIV(value);
         }
 

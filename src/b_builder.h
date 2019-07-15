@@ -27,6 +27,7 @@ enum b_builder_options {
     B_BUILDER_FOLLOW_SYMLINKS = 1 << 2,
     B_BUILDER_GNU_EXTENSIONS  = 1 << 3,
     B_BUILDER_PAX_EXTENSIONS  = 1 << 4,
+    B_BUILDER_IGNORE_SOCKETS  = 1 << 5,
     B_BUILDER_EXTENSIONS_MASK = (B_BUILDER_GNU_EXTENSIONS |
                                  B_BUILDER_PAX_EXTENSIONS)
 };
