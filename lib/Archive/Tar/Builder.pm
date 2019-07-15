@@ -186,7 +186,7 @@ C<ignore_errors> is not enabled.  Finally, reset any other error data present.
 
 =head1 AUTHOR
 
-Written by Xan Tronix <xan@cpan.org>
+Written by Alexandra Hrefna Maheu <xan@cpan.org>
 
 =head1 CONTRIBUTORS
 
