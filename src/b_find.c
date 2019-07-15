@@ -165,14 +165,6 @@ error_string_dup:
     return NULL;
 }
 
-static int clear_nonblock(int fd) {
-    int flags;
-
-    if ((flags = fcntl(fd, F_GETFL) < 0))
-        return -1;
-    return fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-}
-
 /*
  * callback() should return a 0 or 1; 0 to indicate that traversal at the current
  * level should halt, or 1 that it should continue.
@@ -219,7 +211,7 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
         if ((fd = open(clean_path->str, oflags)) < 0) {
             goto error_open;
         }
-        if (clear_nonblock(fd))
+        if (fcntl(fd, F_SETFL, oflags & ~O_NONBLOCK))  // previously clear_nonblock, however we know oflags so we can do it outselves
             goto error_open;
     }
 
@@ -317,7 +309,7 @@ int b_find(b_builder *builder, b_string *path, b_string *member_name, b_find_cal
                 goto cleanup_item;
             }
         } else {
-            if (clear_nonblock(fd))
+            if (fcntl(fd, F_SETFL, oflags & ~O_NONBLOCK)) // previously clear_nonblock, however we know oflags so we can do it outselves
                 goto cleanup_item;
             if (fstat(item_fd, &item_st) < 0) {
                 if (err) {
