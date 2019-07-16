@@ -1,6 +1,6 @@
 package Archive::Tar::Builder;
 
-# Copyright (c) 2014, cPanel, Inc.
+# Copyright (c) 2019, cPanel, L.L.C.
 # All rights reserved.
 # http://cpanel.net/
 #
@@ -12,7 +12,8 @@ use warnings;
 
 use XSLoader ();
 
-use Archive::Tar::Builder::UserCache ();
+use Archive::Tar::Builder::UserCache     ();
+use Archive::Tar::Builder::HardlinkCache ();
 
 our $VERSION = '2.5002';
 
@@ -70,10 +71,19 @@ cause Archive::Tar::Builder to die() at the end of the stream.
 
 When set, symlinks encountered while archiving are followed.
 
+=item C<preserve_hardlinks>
+
+When set, hardlinks encountered while archiving are preserved, and their
+respective file contents will not be duplicated in the output stream.
+
 =item C<gnu_extensions>
 
 When set, support for arbitrarily long pathnames is enabled using the GNU
 LongLink format.
+
+=item C<posix_extensions>
+
+When set, PAX format archives will be streamed.
 
 =back
 
@@ -200,7 +210,7 @@ Written by Alexandra Hrefna Maheu <xan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2014, cPanel, Inc.
+Copyright (c) 2019, cPanel, L.L.C.
 All rights reserved.
 http://cpanel.net/
 
